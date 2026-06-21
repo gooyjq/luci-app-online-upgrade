@@ -68,11 +68,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          cd package-dir
           TAG="v1.0.${{ github.run_number }}"
-          FILES=$(ls /tmp/pkg/*.apk /tmp/pkg/*.ipk 2>/dev/null || true)
-          if [ -n "$FILES" ]; then
-            gh release create "$TAG" $FILES \
+          for f in /tmp/pkg/*.apk /tmp/pkg/*.ipk; do
+            [ -f "$f" ] || continue
+            echo "Uploading $f to release $TAG"
+            gh release create "$TAG" "$f" \
               --title "v1.0.${{ github.run_number }}" \
-              --notes "自动编译的插件包（.apk + .ipk）" \
-              --generate-notes || true
-          fi
+              --notes "自动编译的插件包" \
+              --generate-notes 2>/dev/null || \
+            gh release upload "$TAG" "$f" 2>/dev/null || true
+          done
