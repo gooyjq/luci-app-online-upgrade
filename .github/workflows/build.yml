@@ -57,3 +57,21 @@ jobs:
           name: luci-app-online-upgrade-package
           path: /tmp/pkg/
           if-no-files-found: warn
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v1.0.${{ github.run_number }}"
+          PKG_FILE=$(ls /tmp/pkg/luci-app-online-upgrade*.apk 2>/dev/null | head -1)
+          if [ -z "$PKG_FILE" ]; then
+            PKG_FILE=$(ls /tmp/pkg/luci-app-online-upgrade*.ipk 2>/dev/null | head -1)
+          fi
+          if [ -n "$PKG_FILE" ]; then
+            echo "Creating release $TAG with $PKG_FILE"
+            gh release create "$TAG" "$PKG_FILE" \
+              --title "v1.0.${{ github.run_number }}" \
+              --notes "自动编译的插件包" \
+              --generate-notes || true
+          fi
