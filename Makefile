@@ -62,14 +62,10 @@ define Package/luci-app-online-upgrade/install
 		$(1)/usr/lib/lua/luci/model/cbi/admin_system/online_upgrade.lua
 
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/system
-	$(INSTALL_DATA) ./root/www/luci-static/resources/view/system/online-upgrade-log.js \
-		$(1)/www/luci-static/resources/view/system/online-upgrade-log.js
-	$(INSTALL_DATA) ./root/www/luci-static/resources/view/system/online-upgrade-progress.js \
-		$(1)/www/luci-static/resources/view/system/online-upgrade-progress.js
+	$(INSTALL_DATA) ./root/www/luci-static/resources/view/system/online-upgrade.js \
+		$(1)/www/luci-static/resources/view/system/online-upgrade.js
 
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/i18n
-	po2lmo $(PO_DIR)/zh-cn/online-upgrade.po \
-		$(1)/usr/lib/lua/luci/i18n/online-upgrade.zh-cn.lmo
 endef
 
 define Package/luci-app-online-upgrade/postinst
