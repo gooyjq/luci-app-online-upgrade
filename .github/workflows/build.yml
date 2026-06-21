@@ -8,9 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        format: [apk, ipk]
 
     steps:
       - name: Checkout source
@@ -33,45 +30,49 @@ jobs:
       - name: Install zstd
         run: sudo apt-get update -qq && sudo apt-get install -y -qq zstd
 
-      - name: Build package (${{ matrix.format }})
+      - name: Build .ipk
         run: |
           cd sdk
           ./scripts/feeds update luci --depth 1
           ./scripts/feeds install -a
           make defconfig
-          if [ "${{ matrix.format }}" = "apk" ]; then
-            echo "CONFIG_USE_APK=y" >> .config
-            make defconfig
-          fi
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
         continue-on-error: true
 
-      - name: Find and copy package (${{ matrix.format }})
+      - name: Save .ipk
         run: |
-          mkdir -p /tmp/pkg/${{ matrix.format }}
-          echo "=== Searching ==="
-          find sdk/ -name "*online-upgrade*" -type f 2>/dev/null
-          find sdk/ -name "*online-upgrade*.${{ matrix.format }}" -type f -exec cp {} /tmp/pkg/${{ matrix.format }}/ \; 2>/dev/null
-          find sdk/ -name "*online-upgrade*" -type f -path "*/bin/*" -exec cp {} /tmp/pkg/${{ matrix.format }}/ \; 2>/dev/null
-          ls -la /tmp/pkg/${{ matrix.format }}/ 2>/dev/null || echo "(empty)"
+          mkdir -p /tmp/pkg
+          find sdk/ -name "*.ipk" -path "*/luci-app-online-upgrade*" -exec cp {} /tmp/pkg/ \; 2>/dev/null
 
-      - name: Upload ${{ matrix.format }} artifact
+      - name: Build .apk
+        run: |
+          cd sdk
+          echo "CONFIG_USE_APK=y" >> .config
+          make defconfig
+          make -j$(nproc) package/luci-app-online-upgrade/compile V=s
+        continue-on-error: true
+
+      - name: Save .apk
+        run: |
+          find sdk/ -name "*.apk" -path "*/luci-app-online-upgrade*" -exec cp {} /tmp/pkg/ \; 2>/dev/null
+          ls -la /tmp/pkg/
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: luci-app-online-upgrade-${{ matrix.format }}
-          path: /tmp/pkg/${{ matrix.format }}/
+          name: luci-app-online-upgrade-packages
+          path: /tmp/pkg/
           if-no-files-found: warn
 
-      - name: Create Release (apk only)
-        if: github.ref == 'refs/heads/main' && matrix.format == 'apk'
+      - name: Create Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="v1.0.${{ github.run_number }}"
-          PKG_FILE=$(ls /tmp/pkg/apk/luci-app-online-upgrade*.apk 2>/dev/null | head -1)
-          if [ -n "$PKG_FILE" ]; then
-            gh release create "$TAG" "$PKG_FILE" \
+          FILES=$(ls /tmp/pkg/*.apk /tmp/pkg/*.ipk 2>/dev/null || true)
+          if [ -n "$FILES" ]; then
+            gh release create "$TAG" $FILES \
               --title "v1.0.${{ github.run_number }}" \
-              --notes "自动编译的插件包" \
+              --notes "自动编译的插件包（.apk + .ipk）" \
               --generate-notes || true
           fi
