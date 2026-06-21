@@ -36,13 +36,17 @@ jobs:
           ./scripts/feeds update luci --depth 1
           ./scripts/feeds install -a
           make defconfig
+          sed -i 's/CONFIG_USE_APK=y/# CONFIG_USE_APK is not set/' .config
+          echo "CONFIG_USE_OPKG=y" >> .config
+          make defconfig
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
         continue-on-error: true
 
       - name: Save .ipk
         run: |
           mkdir -p /tmp/pkg
-          find sdk/ -name "*.ipk" -path "*/luci-app-online-upgrade*" -exec cp {} /tmp/pkg/ \; 2>/dev/null
+          find sdk/bin/ -name "luci-app-online-upgrade*.ipk" -type f -exec cp {} /tmp/pkg/ \; 2>/dev/null
+          ls -la /tmp/pkg/*.ipk 2>/dev/null || echo "(no ipk)"
 
       - name: Build .apk
         run: |
@@ -54,28 +58,24 @@ jobs:
 
       - name: Save .apk
         run: |
-          find sdk/ -name "*.apk" -path "*/luci-app-online-upgrade*" -exec cp {} /tmp/pkg/ \; 2>/dev/null
+          find sdk/bin/ -name "luci-app-online-upgrade*.apk" -type f -exec cp {} /tmp/pkg/ \; 2>/dev/null
+          echo "=== Files to publish ==="
           ls -la /tmp/pkg/
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: luci-app-online-upgrade-packages
-          path: /tmp/pkg/
-          if-no-files-found: warn
 
       - name: Create Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cd package-dir
           TAG="v1.0.${{ github.run_number }}"
-          for f in /tmp/pkg/*.apk /tmp/pkg/*.ipk; do
+          git init /tmp/repo && cd /tmp/repo
+          git remote add origin https://github.com/${{ github.repository }}.git
+          for f in /tmp/pkg/*; do
             [ -f "$f" ] || continue
-            echo "Uploading $f to release $TAG"
             gh release create "$TAG" "$f" \
+              --repo ${{ github.repository }} \
               --title "v1.0.${{ github.run_number }}" \
               --notes "自动编译的插件包" \
               --generate-notes 2>/dev/null || \
-            gh release upload "$TAG" "$f" 2>/dev/null || true
+            gh release upload "$TAG" "$f" \
+              --repo ${{ github.repository }} --clobber 2>/dev/null || true
           done
