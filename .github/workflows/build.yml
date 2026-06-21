@@ -1,0 +1,64 @@
+name: Build Package
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          path: package-dir
+
+      - name: Download ImmortalWrt SDK
+        run: |
+          SDK_URL="https://downloads.immortalwrt.org/releases/25.12.0/targets/x86/64/immortalwrt-sdk-25.12.0-x86-64_gcc-14.2.0_musl.Linux-x86_64.tar.xz"
+          echo "Downloading SDK..."
+          curl -sL "$SDK_URL" -o sdk.tar.xz
+          echo "Extracting SDK..."
+          tar xf sdk.tar.xz
+          mv immortalwrt-sdk-* sdk
+          echo "SDK ready at $(pwd)/sdk"
+
+      - name: Copy package to SDK
+        run: |
+          mkdir -p sdk/package/luci-app-online-upgrade
+          cp -r package-dir/* sdk/package/luci-app-online-upgrade/
+          echo "Package copied"
+          ls -la sdk/package/luci-app-online-upgrade/
+
+      - name: Build package
+        run: |
+          cd sdk
+          ./scripts/feeds update -i
+          make -j$(nproc) package/luci-app-online-upgrade/compile V=s
+          echo "---"
+          echo "Build complete. Finding .ipk files..."
+          find bin/ -name "luci-app-online-upgrade*.ipk" -type f
+
+      - name: Upload .ipk artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luci-app-online-upgrade-ipk
+          path: sdk/bin/packages/*/luci-app-online-upgrade*.ipk
+          if-no-files-found: warn
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          IPK_FILE=$(find sdk/bin/ -name "luci-app-online-upgrade*.ipk" -type f | head -1)
+          if [ -n "$IPK_FILE" ]; then
+            echo "Creating release with $IPK_FILE"
+            gh release create v1.0.0 "$IPK_FILE" \
+              --repo "${{ github.repository }}" \
+              --title "v1.0.0" \
+              --notes "Auto-built package" \
+              --generate-notes || true
+          fi
