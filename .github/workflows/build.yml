@@ -8,6 +8,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        format: [apk, ipk]
 
     steps:
       - name: Checkout source
@@ -18,12 +21,9 @@ jobs:
       - name: Download ImmortalWrt SDK
         run: |
           SDK_URL="https://downloads.immortalwrt.org/releases/25.12.0/targets/x86/64/immortalwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
-          echo "Downloading SDK (this may take a while)..."
           curl -sL "$SDK_URL" -o sdk.tar.zst
-          echo "Extracting SDK..."
           tar --zstd -xf sdk.tar.zst
           mv immortalwrt-sdk-* sdk
-          echo "SDK ready"
 
       - name: Copy package to SDK
         run: |
@@ -33,43 +33,39 @@ jobs:
       - name: Install zstd
         run: sudo apt-get update -qq && sudo apt-get install -y -qq zstd
 
-      - name: Build package
+      - name: Build package (${{ matrix.format }})
         run: |
           cd sdk
           ./scripts/feeds update luci --depth 1
           ./scripts/feeds install -a
           make defconfig
-          echo "CONFIG_USE_APK=y" >> .config
-          make defconfig
+          if [ "${{ matrix.format }}" = "apk" ]; then
+            echo "CONFIG_USE_APK=y" >> .config
+            make defconfig
+          fi
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
 
-      - name: Find and upload artifact
+      - name: Find and copy package
         run: |
-          echo "Searching for built packages..."
-          mkdir -p /tmp/pkg
-          find sdk/ -name "luci-app-online-upgrade*.apk" -type f -exec cp {} /tmp/pkg/ \; 2>/dev/null
-          find sdk/ -name "luci-app-online-upgrade*.ipk" -type f -exec cp {} /tmp/pkg/ \; 2>/dev/null
-          ls -la /tmp/pkg/
+          mkdir -p /tmp/pkg/${{ matrix.format }}
+          find sdk/ -name "luci-app-online-upgrade*.${{ matrix.format }}" -type f -exec cp {} /tmp/pkg/${{ matrix.format }}/ \;
+          ls -la /tmp/pkg/${{ matrix.format }}/
 
-      - name: Upload artifact
+      - name: Upload ${{ matrix.format }} artifact
         uses: actions/upload-artifact@v4
         with:
-          name: luci-app-online-upgrade-package
-          path: /tmp/pkg/
+          name: luci-app-online-upgrade-${{ matrix.format }}
+          path: /tmp/pkg/${{ matrix.format }}/
           if-no-files-found: warn
 
-      - name: Create Release
-        if: github.ref == 'refs/heads/main'
+      - name: Create Release (apk only)
+        if: github.ref == 'refs/heads/main' && matrix.format == 'apk'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="v1.0.${{ github.run_number }}"
-          PKG_FILE=$(ls /tmp/pkg/luci-app-online-upgrade*.apk 2>/dev/null | head -1)
-          if [ -z "$PKG_FILE" ]; then
-            PKG_FILE=$(ls /tmp/pkg/luci-app-online-upgrade*.ipk 2>/dev/null | head -1)
-          fi
+          PKG_FILE=$(ls /tmp/pkg/apk/luci-app-online-upgrade*.apk 2>/dev/null | head -1)
           if [ -n "$PKG_FILE" ]; then
-            echo "Creating release $TAG with $PKG_FILE"
             gh release create "$TAG" "$PKG_FILE" \
               --title "v1.0.${{ github.run_number }}" \
               --notes "自动编译的插件包" \
