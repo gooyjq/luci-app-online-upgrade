@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -29,7 +29,6 @@ jobs:
         run: |
           mkdir -p sdk/package/luci-app-online-upgrade
           cp -r package-dir/* sdk/package/luci-app-online-upgrade/
-          echo "Package copied"
 
       - name: Install zstd
         run: sudo apt-get update -qq && sudo apt-get install -y -qq zstd
@@ -40,17 +39,22 @@ jobs:
           ./scripts/feeds update luci --depth 1
           ./scripts/feeds install -a
           make defconfig
+          echo "CONFIG_USE_APK=y" >> .config
+          make defconfig
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
 
-      - name: Find .ipk
+      - name: Find and upload artifact
         run: |
-          echo "Looking for built packages..."
-          find sdk/bin/ -name "luci-app-online-upgrade*.ipk" -type f || echo "No .ipk found"
-          find sdk/bin/ -name "luci-app-online-upgrade*" -type f || echo "No files found"
+          echo "Searching for built packages..."
+          find sdk/ -name "luci-app-online-upgrade*" -type f 2>/dev/null || echo "No files found"
+          mkdir -p /tmp/pkg
+          find sdk/ -name "luci-app-online-upgrade*.apk" -type f -exec cp {} /tmp/pkg/ \; 2>/dev/null
+          find sdk/ -name "luci-app-online-upgrade*.ipk" -type f -exec cp {} /tmp/pkg/ \; 2>/dev/null
+          ls -la /tmp/pkg/ || echo "Package directory empty"
 
-      - name: Upload .ipk artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: luci-app-online-upgrade-ipk
-          path: sdk/bin/packages/*/luci-app-online-upgrade*.ipk
+          name: luci-app-online-upgrade-package
+          path: /tmp/pkg/
           if-no-files-found: warn
