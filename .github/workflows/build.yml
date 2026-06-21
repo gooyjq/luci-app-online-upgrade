@@ -38,6 +38,7 @@ jobs:
         run: |
           cd sdk
           ./scripts/feeds update -i
+          make defconfig
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
 
       - name: Find .ipk
