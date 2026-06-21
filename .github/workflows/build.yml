@@ -38,6 +38,7 @@ jobs:
         run: |
           cd sdk
           ./scripts/feeds update -i
+          ./scripts/feeds install luci
           make defconfig
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
 
