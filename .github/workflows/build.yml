@@ -17,11 +17,11 @@ jobs:
 
       - name: Download ImmortalWrt SDK
         run: |
-          SDK_URL="https://downloads.immortalwrt.org/releases/25.12.0/targets/x86/64/immortalwrt-sdk-25.12.0-x86-64_gcc-14.2.0_musl.Linux-x86_64.tar.xz"
-          echo "Downloading SDK..."
-          curl -sL "$SDK_URL" -o sdk.tar.xz
+          SDK_URL="https://downloads.immortalwrt.org/releases/25.12.0/targets/x86/64/immortalwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
+          echo "Downloading SDK (this may take a while)..."
+          curl -sL "$SDK_URL" -o sdk.tar.zst
           echo "Extracting SDK..."
-          tar xf sdk.tar.xz
+          tar --zstd -xf sdk.tar.zst
           mv immortalwrt-sdk-* sdk
           echo "SDK ready at $(pwd)/sdk"
 
@@ -30,16 +30,21 @@ jobs:
           mkdir -p sdk/package/luci-app-online-upgrade
           cp -r package-dir/* sdk/package/luci-app-online-upgrade/
           echo "Package copied"
-          ls -la sdk/package/luci-app-online-upgrade/
+
+      - name: Install zstd
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zstd
 
       - name: Build package
         run: |
           cd sdk
           ./scripts/feeds update -i
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
-          echo "---"
-          echo "Build complete. Finding .ipk files..."
-          find bin/ -name "luci-app-online-upgrade*.ipk" -type f
+
+      - name: Find .ipk
+        run: |
+          echo "Looking for built packages..."
+          find sdk/bin/ -name "luci-app-online-upgrade*.ipk" -type f || echo "No .ipk found"
+          find sdk/bin/ -name "luci-app-online-upgrade*" -type f || echo "No files found"
 
       - name: Upload .ipk artifact
         uses: actions/upload-artifact@v4
@@ -47,18 +52,3 @@ jobs:
           name: luci-app-online-upgrade-ipk
           path: sdk/bin/packages/*/luci-app-online-upgrade*.ipk
           if-no-files-found: warn
-
-      - name: Create Release
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          IPK_FILE=$(find sdk/bin/ -name "luci-app-online-upgrade*.ipk" -type f | head -1)
-          if [ -n "$IPK_FILE" ]; then
-            echo "Creating release with $IPK_FILE"
-            gh release create v1.0.0 "$IPK_FILE" \
-              --repo "${{ github.repository }}" \
-              --title "v1.0.0" \
-              --notes "Auto-built package" \
-              --generate-notes || true
-          fi
