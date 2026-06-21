@@ -69,13 +69,16 @@ jobs:
           TAG="v1.0.${{ github.run_number }}"
           git init /tmp/repo && cd /tmp/repo
           git remote add origin https://github.com/${{ github.repository }}.git
+          echo "TAG=$TAG"
+          ls -la /tmp/pkg/
           for f in /tmp/pkg/*; do
             [ -f "$f" ] || continue
+            echo "==> Uploading: $f"
             gh release create "$TAG" "$f" \
               --repo ${{ github.repository }} \
               --title "v1.0.${{ github.run_number }}" \
               --notes "自动编译的插件包" \
-              --generate-notes 2>/dev/null || \
+              --generate-notes || \
             gh release upload "$TAG" "$f" \
-              --repo ${{ github.repository }} --clobber 2>/dev/null || true
+              --repo ${{ github.repository }} --clobber || true
           done
