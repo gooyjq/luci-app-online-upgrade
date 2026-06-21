@@ -1,0 +1,21 @@
+{
+	"luci-app-online-upgrade": {
+		"description": "Grant exec for online upgrade",
+		"read": {
+			"ubus": { "file": [ "exec" ] },
+			"file": {
+				"/usr/bin/online-upgrade.sh check": [ "exec" ],
+				"/usr/bin/online-upgrade.sh background": [ "exec" ]
+			}
+		},
+		"write": {
+			"cgi-io": [ "exec" ],
+			"ubus": { "file": [ "exec" ] },
+			"file": {
+				"/usr/bin/online-upgrade.sh check": [ "exec" ],
+				"/usr/bin/online-upgrade.sh background": [ "exec" ]
+			},
+			"uci": [ "online-upgrade" ]
+		}
+	}
+}
