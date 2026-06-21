@@ -1,0 +1,13 @@
+#!/bin/sh
+
+uci -q batch <<-EOF
+	set online-upgrade.settings.enabled='0'
+	set online-upgrade.settings.repo='gooyjq/ImmortalWrt-Builder'
+	set online-upgrade.settings.tag='Autobuild-x86-64'
+	set online-upgrade.settings.proxy='https://ghfast.top/'
+	set online-upgrade.settings.firmware_pattern='combined-efi.*\\.img\\.gz'
+	set online-upgrade.settings.keep_config='1'
+	commit online-upgrade
+EOF
+
+exit 0
