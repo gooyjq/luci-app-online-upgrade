@@ -1,0 +1,77 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Project-Id-Version: luci-app-online-upgrade\n"
+"Language: zh_CN\n"
+
+msgid "固件在线升级"
+msgstr "固件在线升级"
+
+msgid "从 GitHub Releases 自动检测并升级固件，保留配置。"
+msgstr "从 GitHub Releases 自动检测并升级固件，保留配置。"
+
+msgid "仓库配置"
+msgstr "仓库配置"
+
+msgid "GitHub 仓库"
+msgstr "GitHub 仓库"
+
+msgid "Release 标签"
+msgstr "Release 标签"
+
+msgid "固件匹配模式"
+msgstr "固件匹配模式"
+
+msgid "用于匹配固件文件名的正则表达式，如 combined-efi.*\\.img\\.gz"
+msgstr "用于匹配固件文件名的正则表达式，如 combined-efi.*\\.img\\.gz"
+
+msgid "下载代理"
+msgstr "下载代理"
+
+msgid "GitHub 下载加速代理，如 https://ghfast.top/ 或留空"
+msgstr "GitHub 下载加速代理，如 https://ghfast.top/ 或留空"
+
+msgid "保留配置"
+msgstr "保留配置"
+
+msgid "升级时保留系统配置（密码、网络、插件设置等）"
+msgstr "升级时保留系统配置（密码、网络、插件设置等）"
+
+msgid "操作"
+msgstr "操作"
+
+msgid "检查更新"
+msgstr "检查更新"
+
+msgid "执行升级"
+msgstr "执行升级"
+
+msgid "升级日志"
+msgstr "升级日志"
+
+msgid "暂无日志"
+msgstr "暂无日志"
+
+msgid "返回"
+msgstr "返回"
+
+msgid "刷新"
+msgstr "刷新"
+
+msgid "正在升级..."
+msgstr "正在升级..."
+
+msgid "系统正在后台下载固件并自动刷写，请勿断电！"
+msgstr "系统正在后台下载固件并自动刷写，请勿断电！"
+
+msgid "升级完成后路由器将自动重启，页面会尝试重连。"
+msgstr "升级完成后路由器将自动重启，页面会尝试重连。"
+
+msgid "如果长时间无响应，请手动检查路由器状态。"
+msgstr "如果长时间无响应，请手动检查路由器状态。"
+
+msgid "等待重连"
+msgstr "等待重连"
+
+msgid "升级进度"
+msgstr "升级进度"
