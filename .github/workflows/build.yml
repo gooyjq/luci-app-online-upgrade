@@ -23,7 +23,7 @@ jobs:
           echo "Extracting SDK..."
           tar --zstd -xf sdk.tar.zst
           mv immortalwrt-sdk-* sdk
-          echo "SDK ready at $(pwd)/sdk"
+          echo "SDK ready"
 
       - name: Copy package to SDK
         run: |
@@ -46,11 +46,10 @@ jobs:
       - name: Find and upload artifact
         run: |
           echo "Searching for built packages..."
-          find sdk/ -name "luci-app-online-upgrade*" -type f 2>/dev/null || echo "No files found"
           mkdir -p /tmp/pkg
           find sdk/ -name "luci-app-online-upgrade*.apk" -type f -exec cp {} /tmp/pkg/ \; 2>/dev/null
           find sdk/ -name "luci-app-online-upgrade*.ipk" -type f -exec cp {} /tmp/pkg/ \; 2>/dev/null
-          ls -la /tmp/pkg/ || echo "Package directory empty"
+          ls -la /tmp/pkg/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
