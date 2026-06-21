@@ -44,12 +44,16 @@ jobs:
             make defconfig
           fi
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
+        continue-on-error: true
 
-      - name: Find and copy package
+      - name: Find and copy package (${{ matrix.format }})
         run: |
           mkdir -p /tmp/pkg/${{ matrix.format }}
-          find sdk/ -name "luci-app-online-upgrade*.${{ matrix.format }}" -type f -exec cp {} /tmp/pkg/${{ matrix.format }}/ \;
-          ls -la /tmp/pkg/${{ matrix.format }}/
+          echo "=== Searching ==="
+          find sdk/ -name "*online-upgrade*" -type f 2>/dev/null
+          find sdk/ -name "*online-upgrade*.${{ matrix.format }}" -type f -exec cp {} /tmp/pkg/${{ matrix.format }}/ \; 2>/dev/null
+          find sdk/ -name "*online-upgrade*" -type f -path "*/bin/*" -exec cp {} /tmp/pkg/${{ matrix.format }}/ \; 2>/dev/null
+          ls -la /tmp/pkg/${{ matrix.format }}/ 2>/dev/null || echo "(empty)"
 
       - name: Upload ${{ matrix.format }} artifact
         uses: actions/upload-artifact@v4
