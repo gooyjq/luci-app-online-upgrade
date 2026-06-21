@@ -1,0 +1,77 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Project-Id-Version: luci-app-online-upgrade\n"
+"Language: en_US\n"
+
+msgid "固件在线升级"
+msgstr "Firmware Online Upgrade"
+
+msgid "从 GitHub Releases 自动检测并升级固件，保留配置。"
+msgstr "Automatically check and upgrade firmware from GitHub Releases."
+
+msgid "仓库配置"
+msgstr "Repository"
+
+msgid "GitHub 仓库"
+msgstr "GitHub Repository"
+
+msgid "Release 标签"
+msgstr "Release Tag"
+
+msgid "固件匹配模式"
+msgstr "Firmware Pattern"
+
+msgid "用于匹配固件文件名的正则表达式，如 combined-efi.*\\.img\\.gz"
+msgstr "Regex to match firmware filename, e.g. combined-efi.*\\.img\\.gz"
+
+msgid "下载代理"
+msgstr "Download Proxy"
+
+msgid "GitHub 下载加速代理，如 https://ghfast.top/ 或留空"
+msgstr "GitHub download proxy, e.g. https://ghfast.top/ or leave empty"
+
+msgid "保留配置"
+msgstr "Keep Config"
+
+msgid "升级时保留系统配置（密码、网络、插件设置等）"
+msgstr "Preserve system configuration during upgrade"
+
+msgid "操作"
+msgstr "Actions"
+
+msgid "检查更新"
+msgstr "Check Updates"
+
+msgid "执行升级"
+msgstr "Run Upgrade"
+
+msgid "升级日志"
+msgstr "Upgrade Log"
+
+msgid "暂无日志"
+msgstr "No log yet"
+
+msgid "返回"
+msgstr "Back"
+
+msgid "刷新"
+msgstr "Refresh"
+
+msgid "正在升级..."
+msgstr "Upgrading..."
+
+msgid "系统正在后台下载固件并自动刷写，请勿断电！"
+msgstr "Downloading firmware and flashing, DO NOT POWER OFF!"
+
+msgid "升级完成后路由器将自动重启，页面会尝试重连。"
+msgstr "The router will reboot automatically."
+
+msgid "如果长时间无响应，请手动检查路由器状态。"
+msgstr "If no response, please check the router manually."
+
+msgid "等待重连"
+msgstr "Reconnect"
+
+msgid "升级进度"
+msgstr "Upgrade Progress"
