@@ -37,8 +37,8 @@ jobs:
       - name: Build package
         run: |
           cd sdk
-          ./scripts/feeds update -i
-          ./scripts/feeds install luci
+          ./scripts/feeds update luci --depth 1
+          ./scripts/feeds install -a
           make defconfig
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
 
