@@ -6,6 +6,7 @@ permissions:
   issues: write
   pull-requests: write
   statuses: write
+  metadata: write
 
 on:
   push:
@@ -95,8 +96,8 @@ jobs:
       # ---------- 10. 上传所有产物 ----------
       - name: Upload Packages
         uses: softprops/action-gh-release@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          files: /tmp/pkg/*
         env:
           GITHUB_TOKEN: ${{ github.token }}
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          files: /tmp/pkg/*
