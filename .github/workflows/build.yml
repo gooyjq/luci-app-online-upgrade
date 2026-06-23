@@ -19,69 +19,76 @@ jobs:
         with:
           path: package-dir
 
-      # ---------- 2. 下载 ImmortalWrt SDK ----------
-      - name: Download ImmortalWrt SDK
+      # ============================================================
+      # 第一部分：用 ImmortalWrt 23.05 SDK 编译 .ipk (opkg)
+      # ============================================================
+      - name: Download SDK 23.05 (for .ipk)
         run: |
-          SDK_URL="https://downloads.immortalwrt.org/releases/25.12.0/targets/x86/64/immortalwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
-          curl -sL "$SDK_URL" -o sdk.tar.zst
-          tar --zstd -xf sdk.tar.zst
-          mv immortalwrt-sdk-* sdk
+          curl -sL "https://downloads.immortalwrt.org/releases/23.05.4/targets/x86/64/immortalwrt-sdk-23.05.4-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz" -o sdk23.tar.xz
+          tar -xf sdk23.tar.xz
+          mv immortalwrt-sdk-* sdk23
 
-      # ---------- 3. 把源码拷入 SDK ----------
-      - name: Copy package to SDK
+      - name: Copy package to SDK 23.05
         run: |
-          mkdir -p sdk/package/luci-app-online-upgrade
-          cp -r package-dir/* sdk/package/luci-app-online-upgrade/
+          mkdir -p sdk23/package/luci-app-online-upgrade
+          cp -r package-dir/* sdk23/package/luci-app-online-upgrade/
 
-      # ---------- 4. 安装 SDK 必要的 feed ----------
-      - name: Install feeds
+      - name: Install feeds (SDK 23.05)
         run: |
-          cd sdk
+          cd sdk23
           ./scripts/feeds update luci --depth 1
           ./scripts/feeds install -a
           make defconfig
 
-      # ---------- 5. 第一次编译：生成 .ipk (opkg) ----------
-      - name: Build .ipk (opkg)
-        id: build_ipk
+      - name: Build .ipk
         run: |
-          cd sdk
-          # 切换为 opkg
-          sed -i 's/CONFIG_USE_APK=y/# CONFIG_USE_APK is not set/' .config 2>/dev/null || true
-          echo "CONFIG_USE_OPKG=y" >> .config
-          make defconfig
+          cd sdk23
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
         continue-on-error: true
 
-      # ---------- 6. 保存 .ipk 文件 ----------
-      - name: Save .ipk artifacts
+      - name: Save .ipk
         run: |
           mkdir -p /tmp/pkgs
-          find sdk/bin/ -name "*.ipk" -exec cp {} /tmp/pkgs/ \;
+          find sdk23/bin/ -name "luci-app-online-upgrade*.ipk" -exec cp {} /tmp/pkgs/ \;
           echo "=== .ipk artifacts ==="
-          ls -lh /tmp/pkgs/ 2>/dev/null || echo "(none)"
+          ls -lh /tmp/pkgs/*.ipk 2>/dev/null || echo "(no .ipk)"
 
-      # ---------- 7. 清理 SDK 后重新编译：生成 .apk ----------
-      - name: Build .apk (apk)
-        id: build_apk
+      # ============================================================
+      # 第二部分：用 ImmortalWrt 25.12 SDK 编译 .apk (APK)
+      # ============================================================
+      - name: Download SDK 25.12 (for .apk)
         run: |
-          cd sdk
-          # 完整清理，避免 opkg 产物干扰
-          make clean 2>/dev/null || true
-          # 切换为 apk
-          echo "CONFIG_USE_APK=y" >> .config
+          curl -sL "https://downloads.immortalwrt.org/releases/25.12.0/targets/x86/64/immortalwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst" -o sdk25.tar.zst
+          tar --zstd -xf sdk25.tar.zst
+          mv immortalwrt-sdk-* sdk25
+
+      - name: Copy package to SDK 25.12
+        run: |
+          mkdir -p sdk25/package/luci-app-online-upgrade
+          cp -r package-dir/* sdk25/package/luci-app-online-upgrade/
+
+      - name: Install feeds (SDK 25.12)
+        run: |
+          cd sdk25
+          ./scripts/feeds update luci --depth 1
+          ./scripts/feeds install -a
           make defconfig
+
+      - name: Build .apk
+        run: |
+          cd sdk25
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
         continue-on-error: true
 
-      # ---------- 8. 保存 .apk 文件 ----------
-      - name: Save .apk artifacts
+      - name: Save .apk
         run: |
-          find sdk/bin/ -name "*.apk" -exec cp {} /tmp/pkgs/ \;
+          find sdk25/bin/ -name "luci-app-online-upgrade*.apk" -exec cp {} /tmp/pkgs/ \;
           echo "=== All artifacts ==="
           ls -lh /tmp/pkgs/
 
-      # ---------- 9. 创建 Release 并上传 ipk + apk ----------
+      # ============================================================
+      # 第三部分：上传到 Release
+      # ============================================================
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
@@ -89,11 +96,9 @@ jobs:
           name: v1.0.${{ github.run_number }}
           body: |
             自动编译的插件包
-            
-            - ✅ .ipk (opkg)
-            - ✅ .apk (APK)
-            
-            SDK: ImmortalWrt 25.12.0 x86_64
+
+            - ✅ .ipk (opkg) — 适用于 ImmortalWrt 23.05 及更早
+            - ✅ .apk (APK) — 适用于 ImmortalWrt 25.12+
           files: /tmp/pkgs/*
           token: ${{ github.token }}
           make_latest: true
