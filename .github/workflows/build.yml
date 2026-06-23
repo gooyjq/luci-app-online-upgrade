@@ -19,15 +19,24 @@ jobs:
         with:
           path: package-dir
 
-      # ============================================================
-      # 第一部分：用 ImmortalWrt 23.05 SDK 编译 .ipk (opkg)
-      # ============================================================
-      - name: Download SDK 23.05 (for .ipk)
+      # ---------- 2. 并行下载两个 SDK ----------
+      - name: Download SDKs (parallel)
         run: |
-          curl -sL "https://downloads.immortalwrt.org/releases/23.05.4/targets/x86/64/immortalwrt-sdk-23.05.4-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz" -o sdk23.tar.xz
-          tar -xf sdk23.tar.xz
-          mv immortalwrt-sdk-* sdk23
+          SDK23_URL="https://downloads.immortalwrt.org/releases/23.05.4/targets/x86/64/immortalwrt-sdk-23.05.4-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          SDK25_URL="https://downloads.immortalwrt.org/releases/25.12.0/targets/x86/64/immortalwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
+          # 并行下载两个 SDK
+          curl -sL --retry 5 --retry-delay 10 "$SDK23_URL" -o sdk23.tar.xz &
+          curl -sL --retry 5 --retry-delay 10 "$SDK25_URL" -o sdk25.tar.zst &
+          wait
+          # 并行解压
+          tar -xf sdk23.tar.xz && mv immortalwrt-sdk-* sdk23 &
+          tar --zstd -xf sdk25.tar.zst && mv immortalwrt-sdk-* sdk25 &
+          wait
+          echo "✅ SDKs downloaded and extracted"
 
+      # ============================================================
+      # 编译 .ipk (opkg) - SDK 23.05
+      # ============================================================
       - name: Copy package to SDK 23.05
         run: |
           mkdir -p sdk23/package/luci-app-online-upgrade
@@ -41,6 +50,7 @@ jobs:
           make defconfig
 
       - name: Build .ipk
+        id: build_ipk
         run: |
           cd sdk23
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
@@ -54,14 +64,8 @@ jobs:
           ls -lh /tmp/pkgs/*.ipk 2>/dev/null || echo "(no .ipk)"
 
       # ============================================================
-      # 第二部分：用 ImmortalWrt 25.12 SDK 编译 .apk (APK)
+      # 编译 .apk (APK) - SDK 25.12
       # ============================================================
-      - name: Download SDK 25.12 (for .apk)
-        run: |
-          curl -sL "https://downloads.immortalwrt.org/releases/25.12.0/targets/x86/64/immortalwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst" -o sdk25.tar.zst
-          tar --zstd -xf sdk25.tar.zst
-          mv immortalwrt-sdk-* sdk25
-
       - name: Copy package to SDK 25.12
         run: |
           mkdir -p sdk25/package/luci-app-online-upgrade
@@ -75,6 +79,7 @@ jobs:
           make defconfig
 
       - name: Build .apk
+        id: build_apk
         run: |
           cd sdk25
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
@@ -87,7 +92,7 @@ jobs:
           ls -lh /tmp/pkgs/
 
       # ============================================================
-      # 第三部分：上传到 Release
+      # 上传到 Release
       # ============================================================
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
