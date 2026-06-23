@@ -63,22 +63,21 @@ jobs:
           ls -la /tmp/pkg/
 
       - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="v1.0.${{ github.run_number }}"
-          git init /tmp/repo && cd /tmp/repo
-          git remote add origin https://github.com/${{ github.repository }}.git
-          echo "TAG=$TAG"
-          ls -la /tmp/pkg/
-          for f in /tmp/pkg/*; do
-            [ -f "$f" ] || continue
-            echo "==> Uploading: $f"
-            gh release create "$TAG" "$f" \
-              --repo ${{ github.repository }} \
-              --title "v1.0.${{ github.run_number }}" \
-              --notes "自动编译的插件包" \
-              --generate-notes || \
-            gh release upload "$TAG" "$f" \
-              --repo ${{ github.repository }} --clobber || true
-          done
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          release_name: v1.0.${{ github.run_number }}
+          body: 自动编译的插件包
+          draft: false
+          prerelease: false
+
+      - name: Upload Packages
+        uses: softprops/action-gh-release@v1
+        with:
+          files: /tmp/pkg/*
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
