@@ -2,11 +2,6 @@ name: Build Package
 
 permissions:
   contents: write
-  packages: write
-  issues: write
-  pull-requests: write
-  statuses: write
-  # metadata permission removed for compatibility
 
 on:
   push:
@@ -46,56 +41,59 @@ jobs:
           ./scripts/feeds install -a
           make defconfig
 
-      # ---------- 5. 编译 .ipk ----------
+      # ---------- 5. 第一次编译：生成 .ipk (opkg) ----------
       - name: Build .ipk (opkg)
+        id: build_ipk
         run: |
           cd sdk
-          # 使用 opkg（默认）而不是 apk
-          sed -i 's/CONFIG_USE_APK=y/# CONFIG_USE_APK is not set/' .config
+          # 切换为 opkg
+          sed -i 's/CONFIG_USE_APK=y/# CONFIG_USE_APK is not set/' .config 2>/dev/null || true
           echo "CONFIG_USE_OPKG=y" >> .config
           make defconfig
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
         continue-on-error: true
 
-      # ---------- 6. 编译 .apk (apk) ----------
+      # ---------- 6. 保存 .ipk 文件 ----------
+      - name: Save .ipk artifacts
+        run: |
+          mkdir -p /tmp/pkgs
+          find sdk/bin/ -name "*.ipk" -exec cp {} /tmp/pkgs/ \;
+          echo "=== .ipk artifacts ==="
+          ls -lh /tmp/pkgs/ 2>/dev/null || echo "(none)"
+
+      # ---------- 7. 清理 SDK 后重新编译：生成 .apk ----------
       - name: Build .apk (apk)
+        id: build_apk
         run: |
           cd sdk
-          # 清理上一次构建产物防止冲突
-          make package/clean
-          # 启用 apk，禁用 opkg
+          # 完整清理，避免 opkg 产物干扰
+          make clean 2>/dev/null || true
+          # 切换为 apk
           echo "CONFIG_USE_APK=y" >> .config
-          sed -i 's/CONFIG_USE_OPKG=y/# CONFIG_USE_OPKG is not set/' .config
           make defconfig
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
         continue-on-error: true
 
-      # ---------- 7. 收集 .ipk 与 .apk ----------
-      - name: Collect artifacts
+      # ---------- 8. 保存 .apk 文件 ----------
+      - name: Save .apk artifacts
         run: |
-          mkdir -p /tmp/pkg
-          # 同时复制 .ipk 和 .apk（如果存在）
-          find sdk/bin/ -type f \( -name "*.ipk" -o -name "*.apk" \) -exec cp {} /tmp/pkg/ \;
-          echo "=== Files to publish ==="
-          ls -lh /tmp/pkg/
+          find sdk/bin/ -name "*.apk" -exec cp {} /tmp/pkgs/ \;
+          echo "=== All artifacts ==="
+          ls -lh /tmp/pkgs/
 
-      # ---------- 9. 创建 Release ----------
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      # ---------- 9. 创建 Release 并上传 ipk + apk ----------
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          release_name: v1.0.${{ github.run_number }}
-          body: 自动编译的插件包（含 .ipk 与 .apk）
-          draft: false
-          prerelease: false
-
-      - name: Upload Packages
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          files: /tmp/pkg/*
+          name: v1.0.${{ github.run_number }}
+          body: |
+            自动编译的插件包
+            
+            - ✅ .ipk (opkg)
+            - ✅ .apk (APK)
+            
+            SDK: ImmortalWrt 25.12.0 x86_64
+          files: /tmp/pkgs/*
+          token: ${{ github.token }}
+          make_latest: true
