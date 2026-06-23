@@ -57,30 +57,16 @@ jobs:
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
         continue-on-error: true
 
-      # ---------- 6. 保存 .ipk ----------
-      - name: Save .ipk
+      # ---------- 6. 收集 .ipk 与 .apk ----------
+      - name: Collect artifacts
         run: |
           mkdir -p /tmp/pkg
-          find sdk/bin/ -name "luci-app-online-upgrade*.ipk" -type f -exec cp {} /tmp/pkg/ \; || true
-
-      # ---------- 7. 编译 .apk ----------
-      - name: Build .apk
-        run: |
-          cd sdk
-          # 启用 apk
-          echo "CONFIG_USE_APK=y" >> .config
-          make defconfig
-          make -j$(nproc) package/luci-app-online-upgrade/compile V=s
-        continue-on-error: true
-
-      # ---------- 8. 保存 .apk ----------
-      - name: Save .apk
-        run: |
-          find sdk/bin/ -name "luci-app-online-upgrade*.apk" -type f -exec cp {} /tmp/pkg/ \; || true
+          # 同时复制 .ipk 和 .apk（如果存在）
+          find sdk/bin/ -type f \( -name "*.ipk" -o -name "*.apk" \) -exec cp {} /tmp/pkg/ \;
           echo "=== Files to publish ==="
           ls -lh /tmp/pkg/
 
-      # ---------- 9. 创建（或更新） Release ----------
+      # ---------- 9. 创建 Release ----------
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -93,11 +79,10 @@ jobs:
           draft: false
           prerelease: false
 
-      # ---------- 10. 上传所有产物 ----------
       - name: Upload Packages
         uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          tag_name: v1.0.${{ github.run_number }}
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
           files: /tmp/pkg/*
