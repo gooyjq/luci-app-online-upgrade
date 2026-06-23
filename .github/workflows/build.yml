@@ -96,7 +96,7 @@ jobs:
       - name: Upload Packages
         uses: softprops/action-gh-release@v1
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          tag_name: ${{ steps.create_release.outputs.tag_name }}
           files: /tmp/pkg/*
         env:
           GITHUB_TOKEN: ${{ github.token }}
