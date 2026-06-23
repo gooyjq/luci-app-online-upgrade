@@ -47,7 +47,7 @@ jobs:
           make defconfig
 
       # ---------- 5. 编译 .ipk ----------
-      - name: Build .ipk
+      - name: Build .ipk (opkg)
         run: |
           cd sdk
           # 使用 opkg（默认）而不是 apk
@@ -57,7 +57,20 @@ jobs:
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
         continue-on-error: true
 
-      # ---------- 6. 收集 .ipk 与 .apk ----------
+      # ---------- 6. 编译 .apk (apk) ----------
+      - name: Build .apk (apk)
+        run: |
+          cd sdk
+          # 清理上一次构建产物防止冲突
+          make package/clean
+          # 启用 apk，禁用 opkg
+          echo "CONFIG_USE_APK=y" >> .config
+          sed -i 's/CONFIG_USE_OPKG=y/# CONFIG_USE_OPKG is not set/' .config
+          make defconfig
+          make -j$(nproc) package/luci-app-online-upgrade/compile V=s
+        continue-on-error: true
+
+      # ---------- 7. 收集 .ipk 与 .apk ----------
       - name: Collect artifacts
         run: |
           mkdir -p /tmp/pkg
