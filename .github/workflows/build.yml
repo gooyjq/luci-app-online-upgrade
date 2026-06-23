@@ -1,5 +1,14 @@
 name: Build Package
 
+permissions:
+  contents: write
+  packages: write
+  issues: write
+  pull-requests: write
+  statuses: write
+  # Ensure releases can be created
+  releases: write
+
 on:
   push:
     branches: [main]
@@ -10,11 +19,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ---------- 1. 检出源码 ----------
       - name: Checkout source
         uses: actions/checkout@v4
         with:
           path: package-dir
 
+      # ---------- 2. 下载 ImmortalWrt SDK ----------
       - name: Download ImmortalWrt SDK
         run: |
           SDK_URL="https://downloads.immortalwrt.org/releases/25.12.0/targets/x86/64/immortalwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
@@ -22,46 +33,55 @@ jobs:
           tar --zstd -xf sdk.tar.zst
           mv immortalwrt-sdk-* sdk
 
+      # ---------- 3. 把源码拷入 SDK ----------
       - name: Copy package to SDK
         run: |
           mkdir -p sdk/package/luci-app-online-upgrade
           cp -r package-dir/* sdk/package/luci-app-online-upgrade/
 
-      - name: Install zstd
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq zstd
-
-      - name: Build .ipk
+      # ---------- 4. 安装 SDK 必要的 feed ----------
+      - name: Install feeds
         run: |
           cd sdk
           ./scripts/feeds update luci --depth 1
           ./scripts/feeds install -a
           make defconfig
+
+      # ---------- 5. 编译 .ipk ----------
+      - name: Build .ipk
+        run: |
+          cd sdk
+          # 使用 opkg（默认）而不是 apk
           sed -i 's/CONFIG_USE_APK=y/# CONFIG_USE_APK is not set/' .config
           echo "CONFIG_USE_OPKG=y" >> .config
           make defconfig
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
         continue-on-error: true
 
+      # ---------- 6. 保存 .ipk ----------
       - name: Save .ipk
         run: |
           mkdir -p /tmp/pkg
-          find sdk/bin/ -name "luci-app-online-upgrade*.ipk" -type f -exec cp {} /tmp/pkg/ \; 2>/dev/null
-          ls -la /tmp/pkg/*.ipk 2>/dev/null || echo "(no ipk)"
+          find sdk/bin/ -name "luci-app-online-upgrade*.ipk" -type f -exec cp {} /tmp/pkg/ \; || true
 
+      # ---------- 7. 编译 .apk ----------
       - name: Build .apk
         run: |
           cd sdk
+          # 启用 apk
           echo "CONFIG_USE_APK=y" >> .config
           make defconfig
           make -j$(nproc) package/luci-app-online-upgrade/compile V=s
         continue-on-error: true
 
+      # ---------- 8. 保存 .apk ----------
       - name: Save .apk
         run: |
-          find sdk/bin/ -name "luci-app-online-upgrade*.apk" -type f -exec cp {} /tmp/pkg/ \; 2>/dev/null
+          find sdk/bin/ -name "luci-app-online-upgrade*.apk" -type f -exec cp {} /tmp/pkg/ \; || true
           echo "=== Files to publish ==="
-          ls -la /tmp/pkg/
+          ls -lh /tmp/pkg/
 
+      # ---------- 9. 创建（或更新） Release ----------
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -70,14 +90,14 @@ jobs:
         with:
           tag_name: v1.0.${{ github.run_number }}
           release_name: v1.0.${{ github.run_number }}
-          body: 自动编译的插件包
+          body: 自动编译的插件包（含 .ipk 与 .apk）
           draft: false
           prerelease: false
 
+      # ---------- 10. 上传所有产物 ----------
       - name: Upload Packages
         uses: softprops/action-gh-release@v1
         with:
           files: /tmp/pkg/*
         env:
           GITHUB_TOKEN: ${{ github.token }}
-
