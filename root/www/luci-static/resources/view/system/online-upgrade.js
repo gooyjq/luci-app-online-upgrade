@@ -27,12 +27,25 @@ return view.extend({
 
 				if (text.indexOf('发现新固件') >= 0) {
 					resultEl.textContent = '✅ 发现新固件！';
+					resultEl.style.color = '';
 					var upgBtn = document.getElementById('btn-upgrade');
+					var forceBtn = document.getElementById('btn-force');
 					if (upgBtn) upgBtn.style.display = 'inline-block';
+					if (forceBtn) forceBtn.style.display = 'none';
 				} else if (text.indexOf('错误') >= 0) {
 					resultEl.textContent = '❌ 检查失败';
+					resultEl.style.color = '';
+					var forceBtn = document.getElementById('btn-force');
+					if (forceBtn) forceBtn.style.display = 'inline-block';
+					var upgBtn = document.getElementById('btn-upgrade');
+					if (upgBtn) upgBtn.style.display = 'none';
 				} else {
 					resultEl.textContent = '✓ 已是最新';
+					resultEl.style.color = '#4CAF50';
+					var forceBtn = document.getElementById('btn-force');
+					if (forceBtn) forceBtn.style.display = 'inline-block';
+					var upgBtn = document.getElementById('btn-upgrade');
+					if (upgBtn) upgBtn.style.display = 'none';
 				}
 
 				var lines = text.split('\n');
@@ -201,7 +214,7 @@ return view.extend({
 				]),
 				E('div', {style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;'}, [
 					E('button', {id: 'btn-check', class: 'btn cbi-button-action', click: runCheck}, '检查更新'),
-					E('button', {id: 'btn-upgrade', class: 'btn cbi-button-action important', style: 'display:none;', click: runUpgrade}, '立即升级'),
+					E('button', {id: 'btn-upgrade', class: 'btn cbi-button-action important', style: 'display:none;background:#4CAF50;border-color:#4CAF50;', click: runUpgrade}, '立即升级'),
 					E('button', {id: 'btn-force', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;', click: runForceUpgrade}, '强制更新'),
 					E('span', {id: 'check-result', style: 'color:#888;font-size:12px;margin-left:4px;'}, '')
 				])
