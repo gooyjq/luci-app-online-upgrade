@@ -65,4 +65,4 @@ config online-upgrade 'settings'
 
 ## 许可证
 
-GPL-2.0-only
+GNU GENERAL PUBLIC LICENSE
