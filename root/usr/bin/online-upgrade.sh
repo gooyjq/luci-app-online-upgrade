@@ -84,26 +84,24 @@ HTTP_CODE=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} \
     -H "User-Agent: curl/online-upgrade" \
     -o "$TMP_JSON" -w "%{http_code}" "$API_URL")
 if [ "$HTTP_CODE" = "403" ]; then
-    echo "警告：GitHub API 访问超60次/小时受限（HTTP 403）"
-    echo "尝试通过 Release 页面查找固件..."
-    # 备选方案：解析 GitHub Release 页面 HTML
-    RELEASE_URL="https://github.com/${REPO}/releases/tag/${TAG}"
-    FW_URLS=$(curl -sL -H "User-Agent: curl/online-upgrade" "$RELEASE_URL" | grep -oE "/${REPO}/releases/download/${TAG}/[^\"]+(\.img\.gz|\.gz)" | head -5)
-    if [ -n "$FW_URLS" ]; then
-        FILE_NAME=$(echo "$FW_URLS" | grep -iE "${FW_PATTERN}" | head -1)
-        [ -z "$FILE_NAME" ] && FILE_NAME=$(echo "$FW_URLS" | head -1)
-        DOWNLOAD_URL="https://github.com${FILE_NAME}"
-        ASSET_UPDATED="unknown"
-        ASSET_UPDATED_LOCAL="未知（API受限）"
-        ASSET_SIZE=0
-        echo "  通过页面找到固件: $(basename "$DOWNLOAD_URL")"
-    else
-        echo "错误：无法获取固件信息，请等待1小时或配置 github_token"
-        echo "提示：uci set online-upgrade.settings.github_token='你的token'"
-        echo "      uci commit online-upgrade"
-        rm -f "$TMP_JSON"
-        exit 1
-    fi
+    echo "警告：GitHub API 限速，等待后重试..."
+    # 重试最多3次，每次等待递增
+    for r in 1 2 3; do
+        sleep $((r * 15))
+        echo "  第${r}次重试..."
+        HTTP_CODE=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} \
+            -H "User-Agent: curl/online-upgrade" \
+            -o "$TMP_JSON" -w "%{http_code}" "$API_URL")
+        [ "$HTTP_CODE" = "200" ] && break
+    done
+fi
+if [ "$HTTP_CODE" = "403" ]; then
+    echo "错误：GitHub API 访问超60次/小时受限（HTTP 403）"
+    echo "请等待1小时后重试，或配置 github_token 提高限制到 5000次/小时"
+    echo "      uci set online-upgrade.settings.github_token='你的token'"
+    echo "      uci commit online-upgrade"
+    rm -f "$TMP_JSON"
+    exit 1
 elif [ "$HTTP_CODE" != "200" ]; then
     echo "错误：GitHub API 返回 HTTP $HTTP_CODE"
     rm -f "$TMP_JSON"
