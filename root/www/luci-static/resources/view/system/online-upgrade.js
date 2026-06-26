@@ -9,6 +9,9 @@ return view.extend({
 	handleReset: null,
 
 	render: function() {
+		var _this = this;
+		var pollTimer = null;
+
 		function runCheck() {
 			var btn = document.getElementById('btn-check');
 			if (!btn) return;
@@ -37,8 +40,11 @@ return view.extend({
 					resultEl.style.color = '';
 					var forceBtn = document.getElementById('btn-force');
 					if (forceBtn) forceBtn.style.display = 'inline-block';
-					var upgBtn = document.getElementById('btn-upgrade');
-					if (upgBtn) upgBtn.style.display = 'none';
+				} else if (text.indexOf('错误') >= 0) {
+					resultEl.textContent = '❌ 检查失败';
+					resultEl.style.color = '';
+					var forceBtn = document.getElementById('btn-force');
+					if (forceBtn) forceBtn.style.display = 'inline-block';
 				} else {
 					resultEl.textContent = '✓ 已是最新';
 					resultEl.style.color = '#4CAF50';
@@ -68,20 +74,26 @@ return view.extend({
 			});
 		}
 
-		function runUpgrade() {
-			if (!confirm('确定执行在线固件升级？\n\n系统将自动备份配置、下载固件、刷写并重启。\n请勿断电！')) return;
+		function startUpgrade(isForce) {
+			var msg = isForce
+				? '确定强制更新固件？\n\n即使当前已是最新版本，也会重新下载并刷写。\n请勿断电！'
+				: '确定执行在线固件升级？\n\n系统将自动备份配置、下载固件、刷写并重启。\n请勿断电！';
+			if (!confirm(msg)) return;
 
 			var progArea = document.getElementById('progress-area');
 			if (progArea) progArea.style.display = 'block';
+
 			var upgBtn = document.getElementById('btn-upgrade');
 			if (upgBtn) upgBtn.style.display = 'none';
+			var forceBtn = document.getElementById('btn-force');
+			if (forceBtn) forceBtn.style.display = 'none';
 
+			// 启动进度条动画
 			var steps = [
 				{p:5, t:'正在备份配置...'},
 				{p:25, t:'正在下载固件...'},
-				{p:50, t:'下载中...'},
-				{p:75, t:'下载完成，准备刷写...'},
-				{p:90, t:'正在刷写固件，请勿断电！'},
+				{p:50, t:'下载完成，准备刷写...'},
+				{p:75, t:'正在刷写固件，请勿断电！'},
 				{p:100, t:'刷写完成，路由器即将重启...'}
 			];
 			var idx = 0;
@@ -100,43 +112,39 @@ return view.extend({
 				}
 			}, 2000);
 
+			// 启动后台升级
 			fs.exec('/usr/bin/online-upgrade.sh', ['background']);
-			ui.awaitReconnect(window.location.host, '192.168.1.1', 'immortalwrt.lan');
+
+			// 轮询状态文件
+			if (pollTimer) clearInterval(pollTimer);
+			pollTimer = setInterval(function() {
+				fs.exec('/bin/cat', ['/tmp/online-upgrade-status']).then(function(r) {
+					var status = (r.stdout || '').trim();
+					if (status.indexOf('failed:') === 0) {
+						// 升级失败
+						clearInterval(interval);
+						clearInterval(pollTimer);
+						pollTimer = null;
+						var errMsg = status.substring(7);
+						updateOutput('\n❌ 升级失败：' + errMsg + '\n');
+						var progArea = document.getElementById('progress-area');
+						if (progArea) progArea.style.display = 'none';
+						var btnCheck = document.getElementById('btn-check');
+						if (btnCheck) { btnCheck.disabled = false; btnCheck.textContent = '检查更新'; }
+						var forceBtn = document.getElementById('btn-force');
+						if (forceBtn) forceBtn.style.display = 'inline-block';
+					} else if (status.indexOf('sysupgrade') === 0) {
+						// 进入刷写阶段，准备等待重启
+						clearInterval(pollTimer);
+						pollTimer = null;
+						ui.awaitReconnect(window.location.host, '192.168.1.1', 'immortalwrt.lan');
+					}
+				}).catch(function() {});
+			}, 3000);
 		}
 
-		function runForceUpgrade() {
-			if (!confirm('确定强制更新固件？\n\n即使当前已是最新版本，也会重新下载并刷写。\n请勿断电！')) return;
-
-			var progArea = document.getElementById('progress-area');
-			if (progArea) progArea.style.display = 'block';
-
-			var steps = [
-				{p:5, t:'正在备份配置...'},
-				{p:25, t:'正在下载固件...'},
-				{p:50, t:'下载中...'},
-				{p:75, t:'下载完成，准备刷写...'},
-				{p:90, t:'正在刷写固件，请勿断电！'},
-				{p:100, t:'刷写完成，路由器即将重启...'}
-			];
-			var idx = 0;
-			var interval = setInterval(function() {
-				if (idx < steps.length) {
-					var bar = document.getElementById('progress-bar');
-					var label = document.getElementById('progress-label');
-					var text = document.getElementById('progress-text');
-					if (bar) bar.style.width = steps[idx].p + '%';
-					if (label) label.textContent = steps[idx].p + '%';
-					if (text) text.textContent = steps[idx].t;
-					updateOutput(steps[idx].t + '\n');
-					idx++;
-				} else {
-					clearInterval(interval);
-				}
-			}, 2000);
-
-			fs.exec('/usr/bin/online-upgrade.sh', ['background']);
-			ui.awaitReconnect(window.location.host, '192.168.1.1', 'immortalwrt.lan');
-		}
+		function runUpgrade() { startUpgrade(false); }
+		function runForceUpgrade() { startUpgrade(true); }
 
 		function updateOutput(t) {
 			var el = document.getElementById('upgrade-result');
@@ -172,6 +180,7 @@ return view.extend({
 			if (arrow) arrow.textContent = hidden ? '▼' : '▶';
 		}
 
+		// 读取当前版本
 		setTimeout(function() {
 			fs.exec('/bin/cat', ['/etc/openwrt_release']).then(function(r) {
 				var lines = (r.stdout || '').split('\n');
@@ -190,6 +199,7 @@ return view.extend({
 			});
 		}, 100);
 
+		// ======== 构建页面 ========
 		return E('div', {'class': 'cbi-map'}, [
 			E('h2', {'class': 'cbi-page-title'}, '固件在线升级'),
 
@@ -224,7 +234,6 @@ return view.extend({
 			E('div', {'class': 'cbi-section', style: 'margin-bottom:16px;padding:20px;'}, [
 				E('div', {style: 'font-size:16px;font-weight:600;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #eee;'}, '仓库配置'),
 				E('div', {style: 'display:flex;flex-direction:column;gap:10px;'}, [
-					// Release URL - 始终可见
 					E('div', {style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;'}, [
 						E('label', {style: 'min-width:100px;font-size:13px;color:#555;font-weight:500;'}, 'Release 地址'),
 						E('div', {style: 'flex:1;min-width:200px;display:flex;align-items:center;gap:6px;'}, [
@@ -233,7 +242,6 @@ return view.extend({
 							E('span', {style: 'font-size:12px;color:#888;'}, '自动解析仓库和标签')
 						])
 					]),
-					// 可折叠高级配置
 					E('div', {style: 'margin-top:4px;margin-bottom:4px;'}, [
 						E('div', {style: 'cursor:pointer;font-size:13px;color:#5e72e4;user-select:none;display:inline-flex;align-items:center;gap:4px;padding:4px 0;', click: toggleAdv}, [
 							E('span', {id: 'adv-arrow'}, '▶'),

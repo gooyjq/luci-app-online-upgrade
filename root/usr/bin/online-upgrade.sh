@@ -173,6 +173,9 @@ echo "============================================"
 echo "  [执行升级]"
 echo "============================================"
 
+# 初始化状态文件
+echo "backing_up" > /tmp/online-upgrade-status
+
 # ---- 备份 ----
 TS=$(date +%Y%m%d-%H%M%S)
 BACKUP_TMP="/tmp/pre-upgrade-backup-${TS}.tar.gz"
@@ -200,16 +203,19 @@ if [ -f "$TMP_FIRMWARE" ] && [ -f "${TMP_FIRMWARE}.ts" ]; then
     fi
 fi
 if [ "$DOWNLOAD_SKIP" = "0" ]; then
+    echo "downloading" > /tmp/online-upgrade-status
     echo "  URL: $(echo \"$FULL_URL\" | head -c 80)..."
     curl -sL -o "$TMP_FIRMWARE" "$FULL_URL" 2>&1
     CURL_EXIT=$?
     if [ "$CURL_EXIT" -ne 0 ] || [ ! -s "$TMP_FIRMWARE" ]; then
+        echo "failed:下载失败（curl exit: $CURL_EXIT）" > /tmp/online-upgrade-status
         echo "错误：下载失败！（curl exit: $CURL_EXIT, file size: $(stat -c%s \"$TMP_FIRMWARE\" 2>/dev/null || echo 0)）"
         rm -f "$TMP_FIRMWARE"
         exit 1
     fi
     echo "$ASSET_UPDATED" > "${TMP_FIRMWARE}.ts"
     echo "  下载成功 ($(du -h "$TMP_FIRMWARE" | cut -f1))"
+    echo "downloaded" > /tmp/online-upgrade-status
 fi
 
 # ---- 精简备份到 /boot/ ----
@@ -227,6 +233,7 @@ sysupgrade -b /tmp/bu_full.tar.gz 2>/dev/null
     rm -f /tmp/bu_full.tar.gz
 }
 # ---- 记录本次升级的固件时间戳（重启后用于对比）----
+echo "sysupgrade" > /tmp/online-upgrade-status
 uci set online-upgrade.settings.last_upgrade_ts="$ASSET_UPDATED"
 uci commit online-upgrade
 sync
