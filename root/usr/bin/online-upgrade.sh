@@ -49,7 +49,7 @@ utc_to_local() {
 
 # ===== 后台升级模式 =====
 if [ "$MODE" = "background" ] || [ "$MODE" = "--background" ] || [ "$MODE" = "--bg" ]; then
-    (/bin/sh "$0" "upgrade" >/tmp/online-upgrade.log 2>&1 &)
+    nohup /bin/sh "$0" "upgrade" </dev/null >/tmp/online-upgrade.log 2>&1 &
     exit 0
 fi
 
