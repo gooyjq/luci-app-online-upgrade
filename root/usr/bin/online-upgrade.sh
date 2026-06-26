@@ -176,24 +176,10 @@ echo "============================================"
 # 初始化状态文件
 echo "backing_up" > /tmp/online-upgrade-status
 
-# ---- 备份 ----
-TS=$(date +%Y%m%d-%H%M%S)
-BACKUP_TMP="/tmp/pre-upgrade-backup-${TS}.tar.gz"
-BACKUP_ROOT="/root/pre-upgrade-backup-${TS}.tar.gz"
-echo ""
-echo "Step 1: 创建配置备份..."
-sysupgrade -b "$BACKUP_TMP"
-if [ $? -ne 0 ] || [ ! -s "$BACKUP_TMP" ]; then
-    echo "错误：配置备份失败！"
-    exit 1
-fi
-cp "$BACKUP_TMP" "$BACKUP_ROOT"
-
-# ---- 下载固件 ----
+# ---- Step 1: 下载固件 ----
 FULL_URL="${PROXY}${DOWNLOAD_URL}"
 echo ""
-echo "Step 2: 下载固件..."
-# 如果已存在且时间戳一致，跳过下载
+echo "Step 1: 下载固件..."
 DOWNLOAD_SKIP=0
 if [ -f "$TMP_FIRMWARE" ] && [ -f "${TMP_FIRMWARE}.ts" ]; then
     LOCAL_TS=$(cat "${TMP_FIRMWARE}.ts")
@@ -204,12 +190,12 @@ if [ -f "$TMP_FIRMWARE" ] && [ -f "${TMP_FIRMWARE}.ts" ]; then
 fi
 if [ "$DOWNLOAD_SKIP" = "0" ]; then
     echo "downloading" > /tmp/online-upgrade-status
-    echo "  URL: $(echo \"$FULL_URL\" | head -c 80)..."
+    echo "  URL: $(echo "$FULL_URL" | head -c 80)..."
     curl -sL -o "$TMP_FIRMWARE" "$FULL_URL" 2>&1
     CURL_EXIT=$?
     if [ "$CURL_EXIT" -ne 0 ] || [ ! -s "$TMP_FIRMWARE" ]; then
         echo "failed:下载失败（curl exit: $CURL_EXIT）" > /tmp/online-upgrade-status
-        echo "错误：下载失败！（curl exit: $CURL_EXIT, file size: $(stat -c%s \"$TMP_FIRMWARE\" 2>/dev/null || echo 0)）"
+        echo "错误：下载失败！（curl exit: $CURL_EXIT）"
         rm -f "$TMP_FIRMWARE"
         exit 1
     fi
@@ -217,6 +203,29 @@ if [ "$DOWNLOAD_SKIP" = "0" ]; then
     echo "  下载成功 ($(du -h "$TMP_FIRMWARE" | cut -f1))"
     echo "downloaded" > /tmp/online-upgrade-status
 fi
+
+# ---- Step 2: 先记录时间戳到 UCI（备份前，确保备份含时间戳）----
+echo ""
+echo "Step 2: 记录固件版本..."
+echo "saving_ts" > /tmp/online-upgrade-status
+uci set online-upgrade.settings.last_upgrade_ts="$ASSET_UPDATED"
+uci commit online-upgrade
+sync
+echo "  已记录版本: ${ASSET_UPDATED_LOCAL}"
+
+# ---- Step 3: 备份配置（此时 UCI 已包含时间戳）----
+TS=$(date +%Y%m%d-%H%M%S)
+BACKUP_TMP="/tmp/pre-upgrade-backup-${TS}.tar.gz"
+BACKUP_ROOT="/root/pre-upgrade-backup-${TS}.tar.gz"
+echo ""
+echo "Step 3: 创建配置备份..."
+sysupgrade -b "$BACKUP_TMP"
+if [ $? -ne 0 ] || [ ! -s "$BACKUP_TMP" ]; then
+    echo "错误：配置备份失败！"
+    exit 1
+fi
+cp "$BACKUP_TMP" "$BACKUP_ROOT"
+echo "  备份到: ${BACKUP_ROOT}"
 
 # ---- 精简备份到 /boot/ ----
 echo ""
@@ -232,15 +241,12 @@ sysupgrade -b /tmp/bu_full.tar.gz 2>/dev/null
     cd / && sync
     rm -f /tmp/bu_full.tar.gz
 }
-# ---- 记录本次升级的固件时间戳（重启后用于对比）----
-echo "sysupgrade" > /tmp/online-upgrade-status
-uci set online-upgrade.settings.last_upgrade_ts="$ASSET_UPDATED"
-uci commit online-upgrade
-sync
-sleep 1
 # ---- sysupgrade ----
 echo ""
 echo "Step 4: 执行 sysupgrade..."
+echo "sysupgrade" > /tmp/online-upgrade-status
+sync
+sleep 1
 /sbin/sysupgrade "$TMP_FIRMWARE"
 # 如果 sysupgrade 失败（返回了），清除时间戳避免误判
 echo "错误：sysupgrade 执行失败！" >> /tmp/online-upgrade.log
