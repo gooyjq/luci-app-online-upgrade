@@ -5,9 +5,6 @@
 		"action": {
 			"type": "view",
 			"path": "system/online-upgrade"
-		},
-		"depends": {
-			"acl": [ "luci-app-online-upgrade" ]
 		}
 	}
 }
