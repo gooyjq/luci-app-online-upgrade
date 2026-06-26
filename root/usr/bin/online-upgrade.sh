@@ -200,9 +200,11 @@ if [ -f "$TMP_FIRMWARE" ] && [ -f "${TMP_FIRMWARE}.ts" ]; then
     fi
 fi
 if [ "$DOWNLOAD_SKIP" = "0" ]; then
-    curl -sL -o "$TMP_FIRMWARE" "$FULL_URL" --progress-bar 2>&1
-    if [ $? -ne 0 ] || [ ! -s "$TMP_FIRMWARE" ]; then
-        echo "错误：下载失败！"
+    echo "  URL: $(echo \"$FULL_URL\" | head -c 80)..."
+    curl -sL -o "$TMP_FIRMWARE" "$FULL_URL" 2>&1
+    CURL_EXIT=$?
+    if [ "$CURL_EXIT" -ne 0 ] || [ ! -s "$TMP_FIRMWARE" ]; then
+        echo "错误：下载失败！（curl exit: $CURL_EXIT, file size: $(stat -c%s \"$TMP_FIRMWARE\" 2>/dev/null || echo 0)）"
         rm -f "$TMP_FIRMWARE"
         exit 1
     fi
