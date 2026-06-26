@@ -59,6 +59,10 @@ define Package/luci-app-online-upgrade/install
 	$(INSTALL_DATA) ./root/usr/lib/lua/luci/controller/admin_system/online_upgrade.lua \
 		$(1)/usr/lib/lua/luci/controller/admin_system/online_upgrade.lua
 
+	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
+	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/luci-app-online-upgrade.json \
+		$(1)/usr/share/luci/menu.d/luci-app-online-upgrade.json
+
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/model/cbi/admin_system
 	$(INSTALL_DATA) ./root/usr/lib/lua/luci/model/cbi/admin_system/online_upgrade.lua \
 		$(1)/usr/lib/lua/luci/model/cbi/admin_system/online_upgrade.lua

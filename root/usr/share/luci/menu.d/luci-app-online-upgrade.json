@@ -1,0 +1,13 @@
+{
+	"admin/system/online_upgrade": {
+		"title": "在线升级",
+		"order": 60,
+		"action": {
+			"type": "view",
+			"path": "system/online-upgrade"
+		},
+		"depends": {
+			"acl": [ "luci-app-online-upgrade" ]
+		}
+	}
+}
