@@ -84,7 +84,7 @@ HTTP_CODE=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} \
     -H "User-Agent: curl/online-upgrade" \
     -o "$TMP_JSON" -w "%{http_code}" "$API_URL")
 if [ "$HTTP_CODE" = "403" ]; then
-    echo "错误：GitHub API 访问受限（HTTP 403）"
+    echo "错误：GitHub API 访问超60次/小时受限（HTTP 403）"
     echo "提示：可在 UCI 中配置 github_token 提高限制到 5000次/小时"
     echo "      uci set online-upgrade.settings.github_token='你的token'"
     echo "      uci commit online-upgrade"
