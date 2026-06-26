@@ -74,6 +74,29 @@ return view.extend({
 			});
 		}
 
+		function showRebootOverlay() {
+			// 防止重复创建
+			if (document.getElementById('reboot-overlay')) return;
+			var seconds = 120;
+			var overlay = E('div', {id: 'reboot-overlay', style: 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;'}, [
+				E('div', {style: 'font-size:28px;font-weight:600;margin-bottom:10px;'}, '🔄 路由器正在重启'),
+				E('div', {style: 'font-size:14px;color:#aaa;margin-bottom:20px;'}, '固件刷写完成，等待路由器重启...'),
+				E('div', {id: 'countdown', style: 'font-size:48px;font-weight:700;'}, String(seconds)),
+				E('div', {style: 'font-size:13px;color:#888;margin-top:8px;'}, '秒后自动刷新')
+			]);
+			document.body.appendChild(overlay);
+
+			var countdownEl = document.getElementById('countdown');
+			var timer = setInterval(function() {
+				seconds--;
+				if (countdownEl) countdownEl.textContent = String(seconds);
+				if (seconds <= 0) {
+					clearInterval(timer);
+					window.location.reload();
+				}
+			}, 1000);
+		}
+
 		function startUpgrade(isForce) {
 			var msg = isForce
 				? '确定强制更新固件？\n\n即使当前已是最新版本，也会重新下载并刷写。\n请勿断电！'
@@ -109,6 +132,8 @@ return view.extend({
 					idx++;
 				} else {
 					clearInterval(interval);
+					// 进度条走完，显示重启浮窗
+					showRebootOverlay();
 				}
 			}, 2000);
 
@@ -134,10 +159,10 @@ return view.extend({
 						var forceBtn = document.getElementById('btn-force');
 						if (forceBtn) forceBtn.style.display = 'inline-block';
 					} else if (status.indexOf('sysupgrade') === 0) {
-						// 进入刷写阶段，准备等待重启
+						// 进入刷写阶段，显示重启浮窗
 						clearInterval(pollTimer);
 						pollTimer = null;
-						ui.awaitReconnect(window.location.host, '192.168.1.1', 'immortalwrt.lan');
+						showRebootOverlay();
 					}
 				}).catch(function() {});
 			}, 3000);
