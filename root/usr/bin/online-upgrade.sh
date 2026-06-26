@@ -49,7 +49,7 @@ utc_to_local() {
 
 # ===== 后台升级模式 =====
 if [ "$MODE" = "background" ] || [ "$MODE" = "--background" ] || [ "$MODE" = "--bg" ]; then
-    (/bin/sh "$0" "upgrade" >/dev/null 2>&1 &)
+    (/bin/sh "$0" "upgrade" >/tmp/online-upgrade.log 2>&1 &)
     exit 0
 fi
 
@@ -197,5 +197,8 @@ sync
 # ---- sysupgrade ----
 echo ""
 echo "Step 4: 执行 sysupgrade..."
-echo "  路由器即将重启，请勿断电！"
 /sbin/sysupgrade "$TMP_FIRMWARE"
+# 如果 sysupgrade 失败（返回了），清除时间戳避免误判
+echo "错误：sysupgrade 执行失败！" >> /tmp/online-upgrade.log
+rm -f "$UPGRADE_TS_FILE"
+exit 1
