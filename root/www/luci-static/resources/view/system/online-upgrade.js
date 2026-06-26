@@ -32,8 +32,8 @@ return view.extend({
 					var forceBtn = document.getElementById('btn-force');
 					if (upgBtn) upgBtn.style.display = 'inline-block';
 					if (forceBtn) forceBtn.style.display = 'none';
-				} else if (text.indexOf('错误') >= 0) {
-					resultEl.textContent = '❌ 检查失败';
+				} else if (text.indexOf('403') >= 0 || text.indexOf('60次') >= 0) {
+					resultEl.textContent = '❌ 检查失败 - 访问超60次/小时受限';
 					resultEl.style.color = '';
 					var forceBtn = document.getElementById('btn-force');
 					if (forceBtn) forceBtn.style.display = 'inline-block';
