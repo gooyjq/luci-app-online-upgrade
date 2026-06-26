@@ -235,6 +235,18 @@ return view.extend({
 					}
 				}
 			});
+			// 检查备份文件时间
+			fs.exec('/bin/sh', ['-c', 'date -r /boot/sysupgrade.tgz 2>/dev/null || echo ""']).then(function(r) {
+				var hint = document.getElementById('backup-hint');
+				if (hint) {
+					var ts = (r.stdout || '').trim();
+					if (ts) {
+						hint.textContent = '配置文件备份时间 ' + ts + ' - 默认自动恢复，仅出现异常时需尝试手动恢复';
+					} else {
+						hint.textContent = '无备份文件';
+					}
+				}
+			});
 		}, 100);
 
 		// ======== 构建页面 ========
@@ -265,7 +277,8 @@ return view.extend({
 					E('button', {id: 'btn-upgrade', class: 'btn cbi-button-action important', style: 'display:none;background:#4CAF50;border-color:#4CAF50;', click: runUpgrade}, '立即升级'),
 					E('button', {id: 'btn-force', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;', click: runForceUpgrade}, '强制更新'),
 					E('span', {id: 'check-result', style: 'color:#888;font-size:12px;margin-left:4px;'}, ''),
-					E('button', {id: 'btn-restore', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:8px;border:1px solid #ff9800;color:#ff9800;background:transparent;', click: restoreConfig}, '恢复配置')
+					E('button', {id: 'btn-restore', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:8px;border:1px solid #ff9800;color:#ff9800;background:transparent;', click: restoreConfig}, '恢复配置'),
+					E('span', {id: 'backup-hint', style: 'color:#999;font-size:11px;margin-left:6px;'}, '')
 				])
 			]),
 
