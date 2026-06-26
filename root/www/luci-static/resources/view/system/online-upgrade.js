@@ -174,6 +174,16 @@ return view.extend({
 		function runUpgrade() { startUpgrade(false); }
 		function runForceUpgrade() { startUpgrade(true); }
 
+		function restoreConfig() {
+			if (!confirm('确定从备份恢复配置文件？\n\n将使用 /boot/sysupgrade.tgz 中的配置覆盖当前配置。')) return;
+			updateOutput('正在恢复配置...\n');
+			fs.exec('/bin/sh', ['-c', 'cd / && tar xzf /boot/sysupgrade.tgz etc/config/ 2>/dev/null && echo OK || echo FAIL']).then(function(r) {
+				var ok = (r.stdout || '').indexOf('OK') >= 0;
+				updateOutput(ok ? '✅ 配置已恢复\n' : '❌ 恢复失败，备份文件不存在\n');
+				if (ok) ui.addNotification(null, E('p', '配置已从 /boot/sysupgrade.tgz 恢复'), 'info');
+			});
+		}
+
 		function updateOutput(t) {
 			var el = document.getElementById('upgrade-result');
 			if (el) { el.style.display = 'block'; el.textContent += t; }
@@ -254,7 +264,8 @@ return view.extend({
 					E('button', {id: 'btn-check', class: 'btn cbi-button-action', click: runCheck}, '检查更新'),
 					E('button', {id: 'btn-upgrade', class: 'btn cbi-button-action important', style: 'display:none;background:#4CAF50;border-color:#4CAF50;', click: runUpgrade}, '立即升级'),
 					E('button', {id: 'btn-force', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;', click: runForceUpgrade}, '强制更新'),
-					E('span', {id: 'check-result', style: 'color:#888;font-size:12px;margin-left:4px;'}, '')
+					E('span', {id: 'check-result', style: 'color:#888;font-size:12px;margin-left:4px;'}, ''),
+					E('button', {id: 'btn-restore', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:8px;border:1px solid #ff9800;color:#ff9800;background:transparent;', click: restoreConfig}, '恢复配置')
 				])
 			]),
 
