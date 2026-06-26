@@ -12,7 +12,6 @@
 #   online-upgrade.sh reset              Reset update check record
 
 CONFIG_FILE="/etc/config/online-upgrade"
-STATE_FILE="/tmp/.online_upgrade_ts"
 
 # Read UCI config
 get_uci() { uci -q get "online-upgrade.settings.$1" 2>/dev/null; }
@@ -56,8 +55,7 @@ fi
 
 # ===== 重置 =====
 if [ "$MODE" = "reset" ] || [ "$MODE" = "--reset" ]; then
-    rm -f "$STATE_FILE"
-    echo "检测记录已重置。"
+    echo "更新记录已重置。"
     exit 0
 fi
 
