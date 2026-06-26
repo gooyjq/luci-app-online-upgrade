@@ -63,6 +63,10 @@ define Package/luci-app-online-upgrade/install
 	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/luci-app-online-upgrade.json \
 		$(1)/usr/share/luci/menu.d/luci-app-online-upgrade.json
 
+	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
+	$(INSTALL_DATA) ./root/usr/share/rpcd/acl.d/luci-app-online-upgrade.json \
+		$(1)/usr/share/rpcd/acl.d/luci-app-online-upgrade.json
+
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/model/cbi/admin_system
 	$(INSTALL_DATA) ./root/usr/lib/lua/luci/model/cbi/admin_system/online_upgrade.lua \
 		$(1)/usr/lib/lua/luci/model/cbi/admin_system/online_upgrade.lua

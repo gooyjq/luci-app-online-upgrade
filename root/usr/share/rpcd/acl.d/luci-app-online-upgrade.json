@@ -1,19 +1,26 @@
 {
 	"luci-app-online-upgrade": {
-		"description": "Grant exec for online upgrade",
+		"description": "Grant access to LuCI app online-upgrade",
 		"read": {
-			"ubus": { "file": [ "exec" ] },
+			"cgi-io": [ "exec" ],
 			"file": {
-				"/usr/bin/online-upgrade.sh check": [ "exec" ],
-				"/usr/bin/online-upgrade.sh background": [ "exec" ]
-			}
+				"/tmp/online-upgrade-status": [ "read" ],
+				"/etc/openwrt_release": [ "read" ],
+				"/etc/config/online-upgrade": [ "read" ],
+				"/etc/config/sysupgrade.tgz": [ "read" ],
+				"/usr/bin/online-upgrade.sh": [ "exec" ],
+				"/bin/cat": [ "exec" ],
+				"/bin/sh": [ "exec" ],
+				"/bin/date": [ "exec" ]
+			},
+			"ubus": {
+				"service": [ "list" ]
+			},
+			"uci": [ "online-upgrade" ]
 		},
 		"write": {
-			"cgi-io": [ "exec" ],
-			"ubus": { "file": [ "exec" ] },
 			"file": {
-				"/usr/bin/online-upgrade.sh check": [ "exec" ],
-				"/usr/bin/online-upgrade.sh background": [ "exec" ]
+				"/etc/config/online-upgrade": [ "write" ]
 			},
 			"uci": [ "online-upgrade" ]
 		}
