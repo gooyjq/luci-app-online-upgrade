@@ -142,9 +142,11 @@ return view.extend({
 			fs.exec('/usr/bin/online-upgrade.sh', ['background']);
 
 			// 轮询状态文件
+			var pollFails = 0;
 			if (pollTimer) clearInterval(pollTimer);
 			pollTimer = setInterval(function() {
 				fs.exec('/bin/cat', ['/tmp/online-upgrade-status']).then(function(r) {
+					pollFails = 0; // 成功后重置失败计数
 					var status = (r.stdout || '').trim();
 					if (status.indexOf('failed:') === 0) {
 						// 升级失败
@@ -166,8 +168,9 @@ return view.extend({
 						showRebootOverlay();
 					}
 				}).catch(function() {
-					// 请求失败，可能路由器已重启
-					if (document.getElementById('reboot-overlay')) {
+					pollFails++;
+					// 连续失败5次（约15秒）才认为路由器已重启
+					if (pollFails >= 5 && document.getElementById('reboot-overlay')) {
 						window.location.reload();
 					}
 				});
