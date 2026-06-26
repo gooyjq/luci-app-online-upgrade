@@ -167,13 +167,7 @@ return view.extend({
 						pollTimer = null;
 						showRebootOverlay();
 					}
-				}).catch(function() {
-					pollFails++;
-					// 连续失败5次（约15秒）才认为路由器已重启
-					if (pollFails >= 5 && document.getElementById('reboot-overlay')) {
-						window.location.reload();
-					}
-				});
+				}).catch(function() {});
 			}, 3000);
 		}
 
