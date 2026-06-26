@@ -106,7 +106,7 @@ DOWNLOAD_URL=$(cat "$TMP_JSON" | jsonfilter -e "@.assets[@.name=\"$FILE_NAME\"].
 rm -f "$TMP_JSON"
 
 # ===== 判断新固件（对比上次升级时记录的时间戳）=====
-UPGRADE_TS_FILE="/etc/config/.firmware_upgrade_ts"
+UPGRADE_TS_FILE="/etc/config/firmware_upgrade_ts"
 LAST_TS=""
 [ -f "$UPGRADE_TS_FILE" ] && LAST_TS=$(cat "$UPGRADE_TS_FILE")
 if [ -z "$LAST_TS" ]; then
