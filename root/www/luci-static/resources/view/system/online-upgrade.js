@@ -165,7 +165,12 @@ return view.extend({
 						pollTimer = null;
 						showRebootOverlay();
 					}
-				}).catch(function() {});
+				}).catch(function() {
+					// 请求失败，可能路由器已重启
+					if (document.getElementById('reboot-overlay')) {
+						window.location.reload();
+					}
+				});
 			}, 3000);
 		}
 
