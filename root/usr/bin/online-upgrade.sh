@@ -237,7 +237,7 @@ sysupgrade -b /tmp/bu_full.tar.gz 2>/dev/null
            /tmp/etc/openclash/ASN.mmdb /tmp/etc/openclash/Country.mmdb \
            /tmp/etc/openclash/cache.db /tmp/etc/openclash/core \
            /tmp/etc/openclash/rule_provider
-    cd /tmp && tar czf /root/sysupgrade.tgz etc usr lib bin root www 2>/dev/null
+    cd /tmp && tar czf /etc/config/sysupgrade.tgz etc usr lib bin root www 2>/dev/null
     cd / && sync
     rm -f /tmp/bu_full.tar.gz
 }

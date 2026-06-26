@@ -175,12 +175,12 @@ return view.extend({
 		function runForceUpgrade() { startUpgrade(true); }
 
 		function restoreConfig() {
-			if (!confirm('确定从备份恢复配置文件？\n\n将使用 /root/sysupgrade.tgz 中的配置覆盖当前配置。')) return;
+			if (!confirm('确定从备份恢复配置文件？\n\n将使用 /etc/config/sysupgrade.tgz 中的配置覆盖当前配置。')) return;
 			updateOutput('正在恢复配置...\n');
-			fs.exec('/bin/sh', ['-c', 'cd / && tar xzf /root/sysupgrade.tgz etc/config/ 2>/dev/null && echo OK || echo FAIL']).then(function(r) {
+			fs.exec('/bin/sh', ['-c', 'cd / && tar xzf /etc/config/sysupgrade.tgz etc/config/ 2>/dev/null && echo OK || echo FAIL']).then(function(r) {
 				var ok = (r.stdout || '').indexOf('OK') >= 0;
 				updateOutput(ok ? '✅ 配置已恢复\n' : '❌ 恢复失败，备份文件不存在\n');
-				if (ok) ui.addNotification(null, E('p', '配置已从 /root/sysupgrade.tgz 恢复'), 'info');
+				if (ok) ui.addNotification(null, E('p', '配置已从 /etc/config/sysupgrade.tgz 恢复'), 'info');
 			});
 		}
 
@@ -236,7 +236,7 @@ return view.extend({
 				}
 			});
 			// 检查备份文件时间
-			fs.exec('/bin/sh', ['-c', 'date -r /root/sysupgrade.tgz 2>/dev/null || echo ""']).then(function(r) {
+			fs.exec('/bin/sh', ['-c', 'date -r /etc/config/sysupgrade.tgz 2>/dev/null || echo ""']).then(function(r) {
 				var hint = document.getElementById('backup-hint');
 				if (hint) {
 					var ts = (r.stdout || '').trim();
