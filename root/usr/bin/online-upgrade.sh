@@ -117,8 +117,7 @@ DOWNLOAD_URL=$(cat "$TMP_JSON" | jsonfilter -e "@.assets[@.name=\"$FILE_NAME\"].
 rm -f "$TMP_JSON"
 
 # ===== 判断新固件（对比上次升级时记录的时间戳）=====
-LAST_TS=""
-[ -f /boot/firmware_upgrade_ts ] && LAST_TS=$(cat /boot/firmware_upgrade_ts)
+LAST_TS="$(uci -q get online-upgrade.settings.last_upgrade_ts 2>/dev/null)"
 if [ -z "$LAST_TS" ]; then
     NEW_FIRMWARE=1
     UPDATE_REASON="首次检测"
@@ -202,13 +201,16 @@ sysupgrade -b /tmp/bu_full.tar.gz 2>/dev/null
     rm -f /tmp/bu_full.tar.gz
 }
 # ---- 记录本次升级的固件时间戳（重启后用于对比）----
-echo "$ASSET_UPDATED" > /boot/firmware_upgrade_ts
+uci set online-upgrade.settings.last_upgrade_ts="$ASSET_UPDATED"
+uci commit online-upgrade
 sync
+sleep 1
 # ---- sysupgrade ----
 echo ""
 echo "Step 4: 执行 sysupgrade..."
 /sbin/sysupgrade "$TMP_FIRMWARE"
 # 如果 sysupgrade 失败（返回了），清除时间戳避免误判
 echo "错误：sysupgrade 执行失败！" >> /tmp/online-upgrade.log
-rm -f /boot/firmware_upgrade_ts
+uci -q delete online-upgrade.settings.last_upgrade_ts
+uci commit online-upgrade
 exit 1
