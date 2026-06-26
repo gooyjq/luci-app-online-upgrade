@@ -83,6 +83,14 @@ GITHUB_TOKEN="$(uci -q get online-upgrade.settings.github_token 2>/dev/null)"
 HTTP_CODE=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} \
     -H "User-Agent: curl/online-upgrade" \
     -o "$TMP_JSON" -w "%{http_code}" "$API_URL")
+if [ "$HTTP_CODE" = "000" ]; then
+    # TLS 连接失败（可能被 OpenClash 拦截），走代理重试
+    echo "警告：直连 GitHub API 失败，尝试通过代理..."
+    PROXY_API="${PROXY}${API_URL}"
+    HTTP_CODE=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} \
+        -H "User-Agent: curl/online-upgrade" \
+        -o "$TMP_JSON" -w "%{http_code}" "$PROXY_API")
+fi
 if [ "$HTTP_CODE" = "403" ]; then
     echo "警告：GitHub API 限速，等待后重试..."
     # 重试最多3次，每次等待递增
