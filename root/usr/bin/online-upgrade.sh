@@ -107,9 +107,20 @@ ASSET_SIZE=$(cat "$TMP_JSON" | jsonfilter -e "@.assets[@.name=\"$FILE_NAME\"].si
 DOWNLOAD_URL=$(cat "$TMP_JSON" | jsonfilter -e "@.assets[@.name=\"$FILE_NAME\"].browser_download_url")
 rm -f "$TMP_JSON"
 
-# ===== 判断新固件 =====
-NEW_FIRMWARE=1
-UPDATE_REASON="GitHub 编译时间: ${ASSET_UPDATED_LOCAL}"
+# ===== 判断新固件（对比本地记录的上次升级时间）=====
+UPGRADE_TS_FILE="/root/.firmware_upgrade_ts"
+LAST_TS=""
+[ -f "$UPGRADE_TS_FILE" ] && LAST_TS=$(cat "$UPGRADE_TS_FILE")
+if [ -z "$LAST_TS" ]; then
+    NEW_FIRMWARE=1
+    UPDATE_REASON="首次检测"
+elif [ "$LAST_TS" != "$ASSET_UPDATED" ]; then
+    NEW_FIRMWARE=1
+    UPDATE_REASON="GitHub 新固件（${ASSET_UPDATED_LOCAL}）"
+else
+    NEW_FIRMWARE=0
+    UPDATE_REASON="已是最新（${ASSET_UPDATED_LOCAL}）"
+fi
 
 # ===== 显示信息 =====
 CURRENT_ID=$(grep "DISTRIB_ID" /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)
@@ -182,6 +193,9 @@ sysupgrade -b /tmp/bu_full.tar.gz 2>/dev/null
     cd / && sync
     rm -f /tmp/bu_full.tar.gz
 }
+# ---- 记录本次升级的固件时间戳（重启后用于对比）----
+echo "$ASSET_UPDATED" > "$UPGRADE_TS_FILE"
+sync
 # ---- sysupgrade ----
 echo ""
 echo "Step 4: 执行 sysupgrade..."
