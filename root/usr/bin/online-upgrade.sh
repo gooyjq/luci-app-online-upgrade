@@ -105,8 +105,8 @@ ASSET_SIZE=$(cat "$TMP_JSON" | jsonfilter -e "@.assets[@.name=\"$FILE_NAME\"].si
 DOWNLOAD_URL=$(cat "$TMP_JSON" | jsonfilter -e "@.assets[@.name=\"$FILE_NAME\"].browser_download_url")
 rm -f "$TMP_JSON"
 
-# ===== 判断新固件（对比本地记录的上次升级时间）=====
-UPGRADE_TS_FILE="/root/.firmware_upgrade_ts"
+# ===== 判断新固件（对比上次升级时记录的时间戳）=====
+UPGRADE_TS_FILE="/etc/config/.firmware_upgrade_ts"
 LAST_TS=""
 [ -f "$UPGRADE_TS_FILE" ] && LAST_TS=$(cat "$UPGRADE_TS_FILE")
 if [ -z "$LAST_TS" ]; then
