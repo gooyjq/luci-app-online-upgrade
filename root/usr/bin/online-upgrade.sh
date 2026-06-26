@@ -190,13 +190,25 @@ cp "$BACKUP_TMP" "$BACKUP_ROOT"
 FULL_URL="${PROXY}${DOWNLOAD_URL}"
 echo ""
 echo "Step 2: 下载固件..."
-curl -sL -o "$TMP_FIRMWARE" "$FULL_URL" --progress-bar 2>&1
-if [ $? -ne 0 ] || [ ! -s "$TMP_FIRMWARE" ]; then
-    echo "错误：下载失败！"
-    rm -f "$TMP_FIRMWARE"
-    exit 1
+# 如果已存在且时间戳一致，跳过下载
+DOWNLOAD_SKIP=0
+if [ -f "$TMP_FIRMWARE" ] && [ -f "${TMP_FIRMWARE}.ts" ]; then
+    LOCAL_TS=$(cat "${TMP_FIRMWARE}.ts")
+    if [ "$LOCAL_TS" = "$ASSET_UPDATED" ]; then
+        echo "  固件已下载，跳过（${ASSET_UPDATED_LOCAL}）"
+        DOWNLOAD_SKIP=1
+    fi
 fi
-echo "  下载成功 ($(du -h "$TMP_FIRMWARE" | cut -f1))"
+if [ "$DOWNLOAD_SKIP" = "0" ]; then
+    curl -sL -o "$TMP_FIRMWARE" "$FULL_URL" --progress-bar 2>&1
+    if [ $? -ne 0 ] || [ ! -s "$TMP_FIRMWARE" ]; then
+        echo "错误：下载失败！"
+        rm -f "$TMP_FIRMWARE"
+        exit 1
+    fi
+    echo "$ASSET_UPDATED" > "${TMP_FIRMWARE}.ts"
+    echo "  下载成功 ($(du -h "$TMP_FIRMWARE" | cut -f1))"
+fi
 
 # ---- 精简备份到 /boot/ ----
 echo ""
