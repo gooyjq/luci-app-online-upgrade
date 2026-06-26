@@ -108,19 +108,8 @@ DOWNLOAD_URL=$(cat "$TMP_JSON" | jsonfilter -e "@.assets[@.name=\"$FILE_NAME\"].
 rm -f "$TMP_JSON"
 
 # ===== 判断新固件 =====
-NEW_FIRMWARE=0
-LAST_TS=""
-[ -f "$STATE_FILE" ] && LAST_TS=$(head -1 "$STATE_FILE")
-if [ -z "$LAST_TS" ]; then
-    NEW_FIRMWARE=1
-    UPDATE_REASON="首次检测"
-elif [ "$LAST_TS" != "$ASSET_UPDATED" ]; then
-    NEW_FIRMWARE=1
-    UPDATE_REASON="固件已重新编译（${ASSET_UPDATED_LOCAL}）"
-else
-    UPDATE_REASON="固件无变化（${ASSET_UPDATED_LOCAL}）"
-fi
-echo "$ASSET_UPDATED" > "$STATE_FILE"
+NEW_FIRMWARE=1
+UPDATE_REASON="GitHub 编译时间: ${ASSET_UPDATED_LOCAL}"
 
 # ===== 显示信息 =====
 CURRENT_ID=$(grep "DISTRIB_ID" /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)
