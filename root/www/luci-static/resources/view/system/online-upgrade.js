@@ -54,6 +54,7 @@ return view.extend({
 					if (upgBtn) upgBtn.style.display = 'none';
 				}
 
+				// 解析并显示版本信息
 				var lines = text.split('\n');
 				for (var i = 0; i < lines.length; i++) {
 					var m = lines[i].match(/最新固件:\s*(\S+)/);
@@ -66,6 +67,18 @@ return view.extend({
 						var el = document.getElementById('latest-size');
 						if (el) el.textContent = m[1].trim();
 					}
+					// 新版本号
+					m = lines[i].match(/新固件版本:\s*(.+)/);
+					if (m) {
+						var el = document.getElementById('new-ver');
+						if (el) el.textContent = m[1].trim();
+					}
+					// 检测依据
+					m = lines[i].match(/检测依据:\s*(.+)/);
+					if (m) {
+						var el = document.getElementById('check-reason');
+						if (el) el.textContent = m[1].trim();
+					}
 				}
 			}).catch(function(e) {
 				updateOutput('检测失败: ' + e.message);
@@ -75,12 +88,11 @@ return view.extend({
 		}
 
 		function showRebootOverlay() {
-			// 防止重复创建
 			if (document.getElementById('reboot-overlay')) return;
 			var seconds = 100;
 			var overlay = E('div', {id: 'reboot-overlay', style: 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;'}, [
 				E('div', {style: 'font-size:28px;font-weight:600;margin-bottom:10px;'}, '🔄 路由器正在重启'),
-				E('div', {style: 'font-size:14px;color:#aaa;margin-bottom:20px;'}, '固件刷写完成，等待路由器重启...'),
+				E('div', {style: 'font-size:14px;color:#aaa;margin-bottom:20px;'}, '固件刷写完成，配置将自动恢复，等待路由器重启...'),
 				E('div', {id: 'countdown', style: 'font-size:48px;font-weight:700;'}, String(seconds)),
 				E('div', {style: 'font-size:13px;color:#888;margin-top:8px;margin-bottom:24px;'}, '秒后自动刷新'),
 				E('button', {style: 'padding:10px 30px;font-size:16px;border:2px solid #4CAF50;background:transparent;color:#4CAF50;border-radius:8px;cursor:pointer;', click: function() { window.location.reload(); }}, '立即刷新')
@@ -100,8 +112,8 @@ return view.extend({
 
 		function startUpgrade(isForce) {
 			var msg = isForce
-				? '确定强制更新固件？\n\n即使当前已是最新版本，也会重新下载并刷写。\n请勿断电！'
-				: '确定执行在线固件升级？\n\n系统将自动备份配置、下载固件、刷写并重启。\n请勿断电！';
+				? '确定强制更新固件？\n\n即使当前已是最新版本，也会重新下载并刷写。\n配置将自动备份并在刷写后恢复。\n请勿断电！'
+				: '确定执行在线固件升级？\n\n系统将自动备份配置 → 下载固件 → 刷写（自动恢复配置）→ 重启。\n请勿断电！';
 			if (!confirm(msg)) return;
 
 			var progArea = document.getElementById('progress-area');
@@ -112,12 +124,11 @@ return view.extend({
 			var forceBtn = document.getElementById('btn-force');
 			if (forceBtn) forceBtn.style.display = 'none';
 
-			// 启动进度条动画
 			var steps = [
 				{p:5, t:'正在备份配置...'},
 				{p:25, t:'正在下载固件...'},
 				{p:50, t:'下载完成，准备刷写...'},
-				{p:75, t:'正在刷写固件，请勿断电！'},
+				{p:75, t:'正在刷写固件，配置将自动恢复！'},
 				{p:100, t:'刷写完成，路由器即将重启...'}
 			];
 			var idx = 0;
@@ -133,23 +144,19 @@ return view.extend({
 					idx++;
 				} else {
 					clearInterval(interval);
-					// 进度条走完，显示重启浮窗
 					showRebootOverlay();
 				}
 			}, 2000);
 
-			// 启动后台升级
 			fs.exec('/usr/bin/online-upgrade.sh', ['background']);
 
-			// 轮询状态文件
 			var pollFails = 0;
 			if (pollTimer) clearInterval(pollTimer);
 			pollTimer = setInterval(function() {
 				fs.exec('/bin/cat', ['/tmp/online-upgrade-status']).then(function(r) {
-					pollFails = 0; // 成功后重置失败计数
+					pollFails = 0;
 					var status = (r.stdout || '').trim();
 					if (status.indexOf('failed:') === 0) {
-						// 升级失败
 						clearInterval(interval);
 						clearInterval(pollTimer);
 						pollTimer = null;
@@ -162,7 +169,6 @@ return view.extend({
 						var forceBtn = document.getElementById('btn-force');
 						if (forceBtn) forceBtn.style.display = 'inline-block';
 					} else if (status.indexOf('sysupgrade') === 0) {
-						// 进入刷写阶段，显示重启浮窗
 						clearInterval(pollTimer);
 						pollTimer = null;
 						showRebootOverlay();
@@ -175,12 +181,31 @@ return view.extend({
 		function runForceUpgrade() { startUpgrade(true); }
 
 		function restoreConfig() {
-			if (!confirm('确定从备份恢复配置文件？\n\n将使用 /etc/config/sysupgrade.tgz 中的配置覆盖当前配置。')) return;
-			updateOutput('正在恢复配置...\n');
-			fs.exec('/bin/sh', ['-c', 'cd / && tar xzf /etc/config/sysupgrade.tgz etc/config/ 2>/dev/null && echo OK || echo FAIL']).then(function(r) {
-				var ok = (r.stdout || '').indexOf('OK') >= 0;
-				updateOutput(ok ? '✅ 配置已恢复\n' : '❌ 恢复失败，备份文件不存在\n');
-				if (ok) ui.addNotification(null, E('p', '配置已从 /etc/config/sysupgrade.tgz 恢复'), 'info');
+			// 查找最新的备份文件
+			fs.exec('/bin/sh', ['-c', 'ls -t /root/pre-upgrade-backup-*.tar.gz 2>/dev/null | head -1']).then(function(r) {
+				var latestBackup = (r.stdout || '').trim();
+				if (latestBackup) {
+					if (!confirm('确定从备份恢复配置？\n\n备份文件: ' + latestBackup + '\n\nsysupgrade 将使用此备份恢复所有配置（包括网络、WiFi、防火墙等）。')) return;
+					updateOutput('正在恢复配置 (使用 sysupgrade -f)...\n');
+					fs.exec('/bin/sh', ['-c', 'sysupgrade -f "' + latestBackup + '" && echo OK || echo FAIL']).then(function(r2) {
+						if (r2.stderr) updateOutput('警告: ' + r2.stderr + '\n');
+						var ok = (r2.stdout || '').indexOf('OK') >= 0;
+						if (ok) {
+							updateOutput('✅ 配置恢复成功！建议重启路由器使配置生效。\n');
+							ui.addNotification(null, E('p', '✅ 配置已从 ' + latestBackup + ' 恢复'), 'info');
+						} else {
+							updateOutput('❌ 恢复失败\n');
+						}
+					});
+				} else {
+					// 尝试从 /etc/config/sysupgrade.tgz 恢复（旧版兼容）
+					updateOutput('未找到 /root/ 下的备份，尝试从 /etc/config/sysupgrade.tgz 恢复...\n');
+					fs.exec('/bin/sh', ['-c', 'cd / && tar xzf /etc/config/sysupgrade.tgz etc/config/ 2>/dev/null && echo OK || echo FAIL']).then(function(r3) {
+						var ok = (r3.stdout || '').indexOf('OK') >= 0;
+						updateOutput(ok ? '✅ 配置已从 /etc/config/sysupgrade.tgz 恢复（部分恢复）\n建议重启或重新应用配置。\n' : '❌ 恢复失败，未找到任何备份文件\n');
+						if (ok) ui.addNotification(null, E('p', '配置已从 /etc/config/sysupgrade.tgz 恢复（部分）'), 'info');
+					});
+				}
 			});
 		}
 
@@ -218,7 +243,7 @@ return view.extend({
 			if (arrow) arrow.textContent = hidden ? '▼' : '▶';
 		}
 
-		// 读取当前版本
+		// 读取当前版本和备份状态
 		setTimeout(function() {
 			fs.exec('/bin/cat', ['/etc/openwrt_release']).then(function(r) {
 				var lines = (r.stdout || '').split('\n');
@@ -235,16 +260,36 @@ return view.extend({
 					}
 				}
 			});
-			// 检查备份文件时间
-			fs.exec('/bin/sh', ['-c', 'date -r /etc/config/sysupgrade.tgz 2>/dev/null || echo ""']).then(function(r) {
+			// 检查备份文件
+			fs.exec('/bin/sh', ['-c', "ls -t /root/pre-upgrade-backup-*.tar.gz 2>/dev/null | head -1 | while read f; do echo \"$f $(date -r \"$f\" '+%Y-%m-%d %H:%M:%S') $(du -h \"$f\" | cut -f1)\"; done"]).then(function(r) {
 				var hint = document.getElementById('backup-hint');
-				if (hint) {
-					var ts = (r.stdout || '').trim();
-					if (ts) {
-						hint.textContent = '配置文件备份时间 ' + ts + ' - 默认自动恢复，仅出现异常时需尝试手动恢复';
-					} else {
-						hint.textContent = '无备份文件';
+				var backupInfoText = document.getElementById('backup-info-text');
+				if (!hint) return;
+				var output = (r.stdout || '').trim();
+				if (output) {
+					var parts = output.split(' ');
+					var name = parts[0].split('/').pop();
+					var ts = parts[1] + ' ' + parts[2];
+					var size = parts[3] || '';
+					hint.textContent = '✅ 备份文件: ' + name + ' (' + ts + ', ' + size + ') - sysupgrade 将自动使用此备份';
+					hint.style.color = '#4CAF50';
+					if (backupInfoText) {
+						backupInfoText.textContent = '备份文件: ' + name + ' | ' + ts + ' | ' + size;
+						var parent = backupInfoText.closest('#backup-info');
+						if (parent) parent.style.display = 'block';
 					}
+				} else {
+					// 回退检查 /etc/config/sysupgrade.tgz
+					fs.exec('/bin/sh', ['-c', 'date -r /etc/config/sysupgrade.tgz 2>/dev/null || echo ""']).then(function(r2) {
+						var ts2 = (r2.stdout || '').trim();
+						if (ts2) {
+							hint.textContent = '⚠️ 配置文件备份时间 ' + ts2 + '（旧版备份，保留在此供异常恢复）';
+							hint.style.color = '#ff9800';
+						} else {
+							hint.textContent = '⚠️ 无备份文件 - 升级前会自动创建';
+							hint.style.color = '#999';
+						}
+					});
 				}
 			});
 		}, 100);
@@ -270,6 +315,11 @@ return view.extend({
 						E('span', {style: 'color:#666;display:inline-block;width:80px;'}, '最新版本'),
 						E('span', {id: 'latest-ver'}, '-'),
 						E('span', {id: 'latest-size', style: 'color:#888;margin-left:8px;font-size:12px;'}, '')
+					]),
+					E('div', {style: 'padding:4px 0;', id: 'new-ver-row'}, [
+						E('span', {style: 'color:#666;display:inline-block;width:80px;'}, '固件版本'),
+						E('span', {id: 'new-ver', style: 'font-weight:600;'}, '-'),
+						E('span', {id: 'check-reason', style: 'color:#888;margin-left:8px;font-size:12px;'}, '')
 					])
 				]),
 				E('div', {style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;'}, [
@@ -324,6 +374,14 @@ return view.extend({
 				]),
 				E('div', {style: 'margin-top:14px;text-align:right;'}, [
 					E('button', {class: 'btn cbi-button-save', style: 'padding:7px 20px;border-radius:4px;cursor:pointer;', click: saveCfg}, '保存配置')
+				])
+			]),
+
+			// 备份信息
+			E('div', {id: 'backup-info', style: 'display:none;margin-bottom:16px;'}, [
+				E('div', {'class': 'cbi-section', style: 'padding:14px 20px;'}, [
+					E('span', {style: 'font-size:13px;color:#666;'}, ''),
+					E('span', {id: 'backup-info-text', style: 'font-size:13px;color:#4CAF50;'}, '')
 				])
 			]),
 

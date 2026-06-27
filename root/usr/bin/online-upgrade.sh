@@ -47,6 +47,33 @@ utc_to_local() {
     date -d "@${epoch}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$utc_str"
 }
 
+# 提取当前固件版本号（数值比较用）
+get_current_version() {
+    local ver=$(grep "DISTRIB_REVISION" /etc/openwrt_release 2>/dev/null | cut -d"'" -f2 | sed 's/r//')
+    [ -z "$ver" ] && ver="0"
+    echo "$ver"
+}
+
+# 提取固件版本号（从文件名提取，如 immortalwrt-25.12.0-x86-64-...）
+extract_fw_version() {
+    local filename="$1"
+    # 匹配如 25.12.0, 23.05.3 等版本号
+    local fwver=$(echo "$filename" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    echo "${fwver:-0}"
+}
+
+# 版本号字符串转可比较数值（如 25.12.0 → 251200）
+ver_to_num() {
+    echo "$1" | awk -F. '{printf "%d%02d%02d", $1, $2, $3}' 2>/dev/null || echo "0"
+}
+
+# 对比版本（当前 < 新 返回 0）
+is_newer_version() {
+    local cur_num=$(ver_to_num "$1")
+    local new_num=$(ver_to_num "$2")
+    [ "$cur_num" -lt "$new_num" ] 2>/dev/null && return 0 || return 1
+}
+
 # ===== 后台升级模式 =====
 if [ "$MODE" = "background" ] || [ "$MODE" = "--background" ] || [ "$MODE" = "--bg" ]; then
     setsid /bin/sh "$0" "upgrade" </dev/null >/tmp/online-upgrade.log 2>&1 &
@@ -67,7 +94,9 @@ if [ "$MODE" = "backup" ] || [ "$MODE" = "--backup" ]; then
     sysupgrade -b "$BAK"
     if [ $? -eq 0 ] && [ -s "$BAK" ]; then
         cp "$BAK" "/root/pre-upgrade-backup-${TS}.tar.gz"
-        echo "备份成功: $BAK ($(du -h "$BAK" | cut -f1))"
+        echo "备份成功: /root/pre-upgrade-backup-${TS}.tar.gz ($(du -h "$BAK" | cut -f1))"
+        echo "备份中包含 $(tar tzf "$BAK" 2>/dev/null | wc -l) 个文件"
+        echo "提示：sysupgrade 会使用 -f 参数自动恢复此备份"
     else
         echo "错误：备份失败！"
         exit 1
@@ -78,28 +107,31 @@ fi
 # ===== 获取 Release 信息 =====
 echo ""
 echo "[1/2] 正在获取 Release 信息..."
-# 可选 GitHub Token（UCI 配置），未设置时使用未认证请求（60次/小时）
 GITHUB_TOKEN="$(uci -q get online-upgrade.settings.github_token 2>/dev/null)"
-HTTP_CODE=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} \
-    -H "User-Agent: curl/online-upgrade" \
-    -o "$TMP_JSON" -w "%{http_code}" "$API_URL")
+if [ -n "$GITHUB_TOKEN" ]; then
+    HTTP_CODE=$(curl -sL -H "Authorization: Bearer $GITHUB_TOKEN" -H "User-Agent: curl/online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$API_URL")
+else
+    HTTP_CODE=$(curl -sL -H "User-Agent: curl/online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$API_URL")
+fi
 if [ "$HTTP_CODE" = "000" ]; then
-    # TLS 连接失败（可能被 OpenClash 拦截），走代理重试
     echo "警告：直连 GitHub API 失败，尝试通过代理..."
     PROXY_API="${PROXY}${API_URL}"
-    HTTP_CODE=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} \
-        -H "User-Agent: curl/online-upgrade" \
-        -o "$TMP_JSON" -w "%{http_code}" "$PROXY_API")
+    if [ -n "$GITHUB_TOKEN" ]; then
+        HTTP_CODE=$(curl -sL -H "Authorization: Bearer $GITHUB_TOKEN" -H "User-Agent: curl/online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$PROXY_API")
+    else
+        HTTP_CODE=$(curl -sL -H "User-Agent: curl/online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$PROXY_API")
+    fi
 fi
 if [ "$HTTP_CODE" = "403" ]; then
     echo "警告：GitHub API 限速，等待后重试..."
-    # 重试最多3次，每次等待递增
     for r in 1 2 3; do
         sleep $((r * 15))
         echo "  第${r}次重试..."
-        HTTP_CODE=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} \
-            -H "User-Agent: curl/online-upgrade" \
-            -o "$TMP_JSON" -w "%{http_code}" "$API_URL")
+        if [ -n "$GITHUB_TOKEN" ]; then
+            HTTP_CODE=$(curl -sL -H "Authorization: Bearer $GITHUB_TOKEN" -H "User-Agent: curl/online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$API_URL")
+        else
+            HTTP_CODE=$(curl -sL -H "User-Agent: curl/online-upgrade" -o "$TMP_JSON" -w "%{http_code}" "$API_URL")
+        fi
         [ "$HTTP_CODE" = "200" ] && break
     done
 fi
@@ -130,35 +162,59 @@ if [ -z "$FILE_NAME" ]; then
     exit 1
 fi
 
-ASSET_UPDATED=$(cat "$TMP_JSON" | jsonfilter -e "@.assets[@.name=\"$FILE_NAME\"].updated_at")
+ASSET_UPDATED=$(cat "$TMP_JSON" | jsonfilter -e "@.assets[@.name=\"${FILE_NAME}\"].updated_at")
 ASSET_UPDATED_LOCAL=$(utc_to_local "$ASSET_UPDATED")
-ASSET_SIZE=$(cat "$TMP_JSON" | jsonfilter -e "@.assets[@.name=\"$FILE_NAME\"].size")
-DOWNLOAD_URL=$(cat "$TMP_JSON" | jsonfilter -e "@.assets[@.name=\"$FILE_NAME\"].browser_download_url")
+ASSET_SIZE=$(cat "$TMP_JSON" | jsonfilter -e "@.assets[@.name=\"${FILE_NAME}\"].size")
+DOWNLOAD_URL=$(cat "$TMP_JSON" | jsonfilter -e "@.assets[@.name=\"${FILE_NAME}\"].browser_download_url")
+
+# 提取版本号（从固件文件名）
+FW_VERSION_RELEASE=$(extract_fw_version "$FILE_NAME")
 rm -f "$TMP_JSON"
 
-# ===== 判断新固件（对比上次升级时记录的时间戳）=====
+# ===== 获取当前固件版本 =====
+CURRENT_RELEASE=$(grep "DISTRIB_RELEASE" /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)
+CURRENT_REVISION=$(grep "DISTRIB_REVISION" /etc/openwrt_release 2>/dev/null | cut -d"'" -f2 | sed "s/r//")
+CURRENT_ID=$(grep "DISTRIB_ID" /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)
+
+# ===== 版本对比（基于版本号 + 时间戳）=====
 LAST_TS="$(uci -q get online-upgrade.settings.last_upgrade_ts 2>/dev/null)"
-if [ -z "$LAST_TS" ]; then
+LAST_VERSION="$(uci -q get online-upgrade.settings.last_upgrade_version 2>/dev/null)"
+
+NEW_FIRMWARE=0
+UPDATE_REASON=""
+
+# 判断是否有新固件
+if [ -z "$LAST_TS" ] && [ -z "$LAST_VERSION" ]; then
     NEW_FIRMWARE=1
     UPDATE_REASON="首次检测"
-elif [ "$LAST_TS" != "$ASSET_UPDATED" ]; then
+elif [ "$FW_VERSION_RELEASE" != "0" ] && [ "$CURRENT_RELEASE" != "$FW_VERSION_RELEASE" ]; then
+    # 基于版本号比较
+    if is_newer_version "$CURRENT_RELEASE" "$FW_VERSION_RELEASE"; then
+        NEW_FIRMWARE=1
+        UPDATE_REASON="新版固件 v${FW_VERSION_RELEASE}（当前 v${CURRENT_RELEASE}）"
+    elif [ -n "$LAST_VERSION" ] && [ "$LAST_VERSION" != "$FW_VERSION_RELEASE" ]; then
+        # 记录的版本号不同但当前已是此版本—可能是重新编译
+        NEW_FIRMWARE=1
+        UPDATE_REASON="固件重新编译（v${FW_VERSION_RELEASE}）"
+    else
+        UPDATE_REASON="已是最新（v${CURRENT_RELEASE}）"
+    fi
+elif [ "$ASSET_UPDATED" != "$LAST_TS" ] 2>/dev/null; then
+    # 版本号相同但时间戳不同—重新编译
     NEW_FIRMWARE=1
-    UPDATE_REASON="GitHub 新固件（${ASSET_UPDATED_LOCAL}）"
+    UPDATE_REASON="固件重新编译（${ASSET_UPDATED_LOCAL}）"
 else
-    NEW_FIRMWARE=0
-    UPDATE_REASON="已是最新（${ASSET_UPDATED_LOCAL}）"
+    UPDATE_REASON="已是最新"
 fi
 
 # ===== 显示信息 =====
 CURRENT_ID=$(grep "DISTRIB_ID" /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)
-CURRENT_REL=$(grep "DISTRIB_RELEASE" /etc/openwrt_release 2>/dev/null | cut -d"'" -f2)
-CURRENT_REV=$(grep "DISTRIB_REVISION" /etc/openwrt_release 2>/dev/null | cut -d"'" -f2 | sed "s/r//")
 echo ""
 echo "============================================"
 echo "  固件状态"
 echo "============================================"
-echo "  当前固件: ${CURRENT_ID} ${CURRENT_REL} (r${CURRENT_REV})"
-echo ""
+echo "  当前固件: ${CURRENT_ID} ${CURRENT_RELEASE} (r${CURRENT_REVISION})"
+echo "  新固件版本: v${FW_VERSION_RELEASE:-N/A}"
 echo "  最新固件: ${FILE_NAME}"
 echo "  文件大小: $(printf "%.0f MB" $((${ASSET_SIZE:-0} / 1024 / 1024)) 2>/dev/null)"
 echo "  编译时间: ${ASSET_UPDATED_LOCAL}"
@@ -212,52 +268,44 @@ if [ "$DOWNLOAD_SKIP" = "0" ]; then
     echo "downloaded" > /tmp/online-upgrade-status
 fi
 
-# ---- Step 2: 先记录时间戳到 UCI（备份前，确保备份含时间戳）----
+# ---- Step 2: 记录版本信息到 UCI（备份前，确保备份含版本记录）----
 echo ""
 echo "Step 2: 记录固件版本..."
 echo "saving_ts" > /tmp/online-upgrade-status
 uci set online-upgrade.settings.last_upgrade_ts="$ASSET_UPDATED"
+uci set online-upgrade.settings.last_upgrade_version="${FW_VERSION_RELEASE:-0}"
 uci commit online-upgrade
 sync
-echo "  已记录版本: ${ASSET_UPDATED_LOCAL}"
+echo "  已记录版本: v${FW_VERSION_RELEASE:-N/A} (${ASSET_UPDATED_LOCAL})"
 
-# ---- Step 3: 备份配置（此时 UCI 已包含时间戳）----
+# ---- Step 3: 创建 sysupgrade 备份（传给 -f 参数）----
 TS=$(date +%Y%m%d-%H%M%S)
 BACKUP_TMP="/tmp/pre-upgrade-backup-${TS}.tar.gz"
 BACKUP_ROOT="/root/pre-upgrade-backup-${TS}.tar.gz"
 echo ""
-echo "Step 3: 创建配置备份..."
+echo "Step 3: 创建 sysupgrade 配置备份..."
 sysupgrade -b "$BACKUP_TMP"
 if [ $? -ne 0 ] || [ ! -s "$BACKUP_TMP" ]; then
     echo "错误：配置备份失败！"
     exit 1
 fi
+# 同时保存到 /root/ 作为应急副本
 cp "$BACKUP_TMP" "$BACKUP_ROOT"
-echo "  备份到: ${BACKUP_ROOT}"
+echo "  备份成功: ${BACKUP_ROOT} ($(du -h "$BACKUP_TMP" | cut -f1))"
+echo "  备份中包含 $(tar tzf "$BACKUP_TMP" 2>/dev/null | wc -l) 个文件"
 
-# ---- 精简备份到 /boot/ ----
+# ---- Step 4: 执行 sysupgrade（带 -f 参数自动恢复配置）----
 echo ""
-echo "Step 3: 写入精简备份到 boot 分区..."
-sysupgrade -b /tmp/bu_full.tar.gz 2>/dev/null
-[ -f /tmp/bu_full.tar.gz ] && {
-    tar xzf /tmp/bu_full.tar.gz -C /tmp 2>/dev/null
-    rm -rf /tmp/etc/openclash/GeoIP.dat /tmp/etc/openclash/GeoSite.dat \
-           /tmp/etc/openclash/ASN.mmdb /tmp/etc/openclash/Country.mmdb \
-           /tmp/etc/openclash/cache.db /tmp/etc/openclash/core \
-           /tmp/etc/openclash/rule_provider
-    cd /tmp && tar czf /etc/config/sysupgrade.tgz etc usr lib bin root www 2>/dev/null
-    cd / && sync
-    rm -f /tmp/bu_full.tar.gz
-}
-# ---- sysupgrade ----
-echo ""
-echo "Step 4: 执行 sysupgrade..."
+echo "Step 4: 执行 sysupgrade（自动恢复配置）..."
 echo "sysupgrade" > /tmp/online-upgrade-status
 sync
 sleep 1
-/sbin/sysupgrade "$TMP_FIRMWARE"
-# 如果 sysupgrade 失败（返回了），清除时间戳避免误判
+echo "  命令: sysupgrade -f ${BACKUP_TMP} ${TMP_FIRMWARE}"
+/sbin/sysupgrade -f "$BACKUP_TMP" "$TMP_FIRMWARE"
+
+# 如果 sysupgrade 失败（返回了），清除记录避免误判
 echo "错误：sysupgrade 执行失败！" >> /tmp/online-upgrade.log
 uci -q delete online-upgrade.settings.last_upgrade_ts
+uci -q delete online-upgrade.settings.last_upgrade_version
 uci commit online-upgrade
 exit 1

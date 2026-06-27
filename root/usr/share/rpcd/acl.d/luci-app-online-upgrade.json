@@ -5,9 +5,12 @@
 			"cgi-io": [ "exec" ],
 			"file": {
 				"/tmp/online-upgrade-status": [ "read" ],
+				"/tmp/pre-upgrade-backup-*": [ "read" ],
+				"/root/pre-upgrade-backup-*": [ "read" ],
 				"/etc/openwrt_release": [ "read" ],
 				"/etc/config/online-upgrade": [ "read" ],
 				"/etc/config/sysupgrade.tgz": [ "read" ],
+				"/lib/upgrade/keep.d/online-upgrade": [ "read" ],
 				"/usr/bin/online-upgrade.sh": [ "exec" ],
 				"/bin/cat": [ "exec" ],
 				"/bin/sh": [ "exec" ],

@@ -52,6 +52,9 @@ define Package/luci-app-online-upgrade/install
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./root/etc/config/online-upgrade $(1)/etc/config/online-upgrade
 
+	$(INSTALL_DIR) $(1)/lib/upgrade/keep.d
+	$(INSTALL_DATA) ./root/lib/upgrade/keep.d/online-upgrade $(1)/lib/upgrade/keep.d/online-upgrade
+
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./root/etc/uci-defaults/99-online-upgrade $(1)/etc/uci-defaults/99-online-upgrade
 

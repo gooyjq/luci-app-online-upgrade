@@ -1,0 +1,3 @@
+/etc/config/online-upgrade
+/etc/config/sysupgrade.tgz
+/root/pre-upgrade-backup-*.tar.gz
