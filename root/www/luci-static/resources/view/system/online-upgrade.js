@@ -264,6 +264,7 @@ return view.extend({
 			fs.exec('/bin/sh', ['-c', "ls -t /root/pre-upgrade-backup-*.tar.gz 2>/dev/null | head -1 | while read f; do echo \"$f $(date -r \"$f\" '+%Y-%m-%d %H:%M:%S') $(du -h \"$f\" | cut -f1)\"; done"]).then(function(r) {
 				var hint = document.getElementById('backup-hint');
 				var backupInfoText = document.getElementById('backup-info-text');
+				var dlBtn = document.getElementById('btn-download');
 				if (!hint) return;
 				var output = (r.stdout || '').trim();
 				if (output) {
@@ -271,8 +272,18 @@ return view.extend({
 					var name = parts[0].split('/').pop();
 					var ts = parts[1] + ' ' + parts[2];
 					var size = parts[3] || '';
-					hint.textContent = '✅ 备份文件: ' + name + ' (' + ts + ', ' + size + ') - sysupgrade 将自动使用此备份';
+					hint.innerHTML = '';
 					hint.style.color = '#4CAF50';
+					var link = E('a', {
+						href: '#',
+						style: 'color:#4CAF50;text-decoration:none;',
+						click: function(e) {
+							e.preventDefault();
+							window.open(LUCI_PATH + '/admin/system/online_upgrade/download', '_blank');
+						}
+					}, '✅ 备份文件: ' + name + ' (' + ts + ', ' + size + ')');
+					hint.appendChild(link);
+					if (dlBtn) dlBtn.style.display = 'inline-block';
 					if (backupInfoText) {
 						backupInfoText.textContent = '备份文件: ' + name + ' | ' + ts + ' | ' + size;
 						var parent = backupInfoText.closest('#backup-info');
@@ -327,7 +338,8 @@ return view.extend({
 					E('button', {id: 'btn-upgrade', class: 'btn cbi-button-action important', style: 'display:none;background:#4CAF50;border-color:#4CAF50;', click: runUpgrade}, '立即升级'),
 					E('button', {id: 'btn-force', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;', click: runForceUpgrade}, '强制更新'),
 					E('span', {id: 'check-result', style: 'color:#888;font-size:12px;margin-left:4px;'}, ''),
-					E('button', {id: 'btn-restore', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:8px;border:1px solid #ff9800;color:#ff9800;background:transparent;', click: restoreConfig}, '恢复配置'),
+					E('button', {id: 'btn-download', class: 'btn cbi-button', style: 'display:none;padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:4px;border:1px solid #2196F3;color:#2196F3;background:transparent;', click: function() { window.open(LUCI_PATH + '/admin/system/online_upgrade/download', '_blank'); }}, '📥 下载备份'),
+					E('button', {id: 'btn-restore', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:4px;border:1px solid #ff9800;color:#ff9800;background:transparent;', click: restoreConfig}, '恢复配置'),
 					E('span', {id: 'backup-hint', style: 'color:#999;font-size:11px;margin-left:6px;'}, '')
 				])
 			]),

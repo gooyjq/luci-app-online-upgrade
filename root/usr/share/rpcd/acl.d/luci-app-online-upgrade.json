@@ -14,7 +14,8 @@
 				"/usr/bin/online-upgrade.sh": [ "exec" ],
 				"/bin/cat": [ "exec" ],
 				"/bin/sh": [ "exec" ],
-				"/bin/date": [ "exec" ]
+				"/bin/date": [ "exec" ],
+				"/bin/ls": [ "exec" ]
 			},
 			"ubus": {
 				"service": [ "list" ]
