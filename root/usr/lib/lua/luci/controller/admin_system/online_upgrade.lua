@@ -12,7 +12,6 @@ function action_download()
 	local fs = require("nixio.fs")
 	local sys = require("luci.sys")
 
-	-- 查找最近备份
 	local filepath = sys.exec("ls -t /root/pre-upgrade-backup-*.tar.gz 2>/dev/null | head -1")
 	filepath = filepath:gsub("%s+$", "")
 
@@ -32,7 +31,6 @@ function action_download()
 	luci.http.header("Content-Type", "application/gzip")
 	luci.http.header("Content-Disposition", 'attachment; filename="' .. filename .. '"')
 
-	-- 流式输出文件内容
 	luci.http.prepare_content("application/gzip")
 	local f = io.open(filepath, "rb")
 	if f then

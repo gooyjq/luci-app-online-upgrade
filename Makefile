@@ -49,6 +49,9 @@ define Package/luci-app-online-upgrade/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) ./root/usr/bin/online-upgrade.sh $(1)/usr/bin/online-upgrade.sh
 
+	$(INSTALL_DIR) $(1)/www/cgi-bin
+	$(INSTALL_BIN) ./root/www/cgi-bin/online-upgrade-restore $(1)/www/cgi-bin/online-upgrade-restore
+
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./root/etc/config/online-upgrade $(1)/etc/config/online-upgrade
 

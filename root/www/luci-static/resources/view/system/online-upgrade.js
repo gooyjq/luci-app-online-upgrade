@@ -180,12 +180,12 @@ return view.extend({
 		function runUpgrade() { startUpgrade(false); }
 		function runForceUpgrade() { startUpgrade(true); }
 
-		function restoreConfig() {
-			// 查找最新的备份文件
+		function autoRestore() {
+			// 自动恢复（从路由器本地备份文件）
 			fs.exec('/bin/sh', ['-c', 'ls -t /root/pre-upgrade-backup-*.tar.gz 2>/dev/null | head -1']).then(function(r) {
 				var latestBackup = (r.stdout || '').trim();
 				if (latestBackup) {
-					if (!confirm('确定从备份恢复配置？\n\n备份文件: ' + latestBackup + '\n\nsysupgrade 将使用此备份恢复所有配置（包括网络、WiFi、防火墙等）。')) return;
+					if (!confirm('确定从备份自动恢复配置？\n\n备份文件: ' + latestBackup + '\n\nsysupgrade 将使用此备份恢复所有配置（包括网络、WiFi、防火墙等）。')) return;
 					updateOutput('正在恢复配置 (使用 sysupgrade -f)...\n');
 					fs.exec('/bin/sh', ['-c', 'sysupgrade -f "' + latestBackup + '" && echo OK || echo FAIL']).then(function(r2) {
 						if (r2.stderr) updateOutput('警告: ' + r2.stderr + '\n');
@@ -198,7 +198,6 @@ return view.extend({
 						}
 					});
 				} else {
-					// 尝试从 /etc/config/sysupgrade.tgz 恢复（旧版兼容）
 					updateOutput('未找到 /root/ 下的备份，尝试从 /etc/config/sysupgrade.tgz 恢复...\n');
 					fs.exec('/bin/sh', ['-c', 'cd / && tar xzf /etc/config/sysupgrade.tgz etc/config/ 2>/dev/null && echo OK || echo FAIL']).then(function(r3) {
 						var ok = (r3.stdout || '').indexOf('OK') >= 0;
@@ -207,6 +206,53 @@ return view.extend({
 					});
 				}
 			});
+		}
+
+		function manualRestore() {
+			// 手动恢复（从本地上传备份文件）
+			var fileInput = document.getElementById('manual-backup-file');
+			if (!fileInput) return;
+			fileInput.click();
+		}
+
+		// 文件选择后的上传恢复处理
+		function handleManualBackupFile(evt) {
+			var file = evt.target.files[0];
+			if (!file) return;
+			evt.target.value = ''; // 清空以便再次选择同一文件
+
+			if (!file.name.match(/\.(tar\.gz|tgz|gz)$/i)) {
+				updateOutput('❌ 请选择 .tar.gz 格式的备份文件\n');
+				return;
+			}
+
+			if (!confirm('确定从本地文件恢复配置？\n\n文件: ' + file.name + ' (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)\n\n将上传该备份文件到路由器并恢复配置。')) return;
+
+			updateOutput('正在上传备份文件 (' + file.name + ')...\n');
+
+			var reader = new FileReader();
+			reader.onload = function(e) {
+				var arrayBuffer = e.target.result;
+
+				updateOutput('正在执行恢复...\n');
+				fetch('/cgi-bin/online-upgrade-restore', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/octet-stream' },
+					body: arrayBuffer
+				}).then(function(resp) {
+					return resp.text();
+				}).then(function(text) {
+					var isOk = text.indexOf('OK:') === 0;
+					var msg = text.replace(/^(OK|ERROR):/, '');
+					updateOutput((isOk ? '✅ ' : '❌ ') + msg + '\n');
+					if (isOk) {
+						ui.addNotification(null, E('p', '✅ 配置已从本地上传的备份文件恢复'), 'info');
+					}
+				}).catch(function(err) {
+					updateOutput('❌ 上传失败: ' + err.message + '\n');
+				});
+			};
+			reader.readAsArrayBuffer(file);
 		}
 
 		function updateOutput(t) {
@@ -274,14 +320,12 @@ return view.extend({
 					var size = parts[3] || '';
 					hint.innerHTML = '';
 					hint.style.color = '#4CAF50';
-					var link = E('a', {
-						href: '#',
-						style: 'color:#4CAF50;text-decoration:none;',
-						click: function(e) {
-							e.preventDefault();
-							window.open(LUCI_PATH + '/admin/system/online_upgrade/download', '_blank');
-						}
-					}, '✅ 备份文件: ' + name + ' (' + ts + ', ' + size + ')');
+				// 备份文件名点击
+				var link = E('a', {
+				    href: '/cgi-bin/luci/admin/system/online_upgrade/download',
+				    style: 'color:#4CAF50;text-decoration:none;',
+				    target: '_blank'
+				}, '✅ 备份文件: ' + name + ' (' + ts + ', ' + size + ')');
 					hint.appendChild(link);
 					if (dlBtn) dlBtn.style.display = 'inline-block';
 					if (backupInfoText) {
@@ -338,8 +382,10 @@ return view.extend({
 					E('button', {id: 'btn-upgrade', class: 'btn cbi-button-action important', style: 'display:none;background:#4CAF50;border-color:#4CAF50;', click: runUpgrade}, '立即升级'),
 					E('button', {id: 'btn-force', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;', click: runForceUpgrade}, '强制更新'),
 					E('span', {id: 'check-result', style: 'color:#888;font-size:12px;margin-left:4px;'}, ''),
-					E('button', {id: 'btn-download', class: 'btn cbi-button', style: 'display:none;padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:4px;border:1px solid #2196F3;color:#2196F3;background:transparent;', click: function() { window.open(LUCI_PATH + '/admin/system/online_upgrade/download', '_blank'); }}, '📥 下载备份'),
-					E('button', {id: 'btn-restore', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:4px;border:1px solid #ff9800;color:#ff9800;background:transparent;', click: restoreConfig}, '恢复配置'),
+					E('button', {id: 'btn-download', class: 'btn cbi-button', style: 'display:none;padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:4px;border:1px solid #2196F3;color:#2196F3;background:transparent;', click: function() { var p = window.location.pathname.match(/^\/.*\/admin/) || ['/cgi-bin/luci/admin']; var b = p[0].replace('/admin', ''); window.open(b + '/admin/system/online_upgrade/download', '_blank'); }}, '📥 下载备份'),
+					E('button', {id: 'btn-auto-restore', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:4px;border:1px solid #4CAF50;color:#4CAF50;background:transparent;', click: autoRestore, title: '从路由器本地的备份文件自动恢复'}, '自动恢复'),
+					E('button', {id: 'btn-manual-restore', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:4px;border:1px solid #ff9800;color:#ff9800;background:transparent;', click: manualRestore, title: '从本地上传备份文件恢复'}, '📂 手动恢复'),
+					E('input', {id: 'manual-backup-file', type: 'file', accept: '.tar.gz,.tgz,.gz', style: 'display:none', change: handleManualBackupFile}),
 					E('span', {id: 'backup-hint', style: 'color:#999;font-size:11px;margin-left:6px;'}, '')
 				])
 			]),

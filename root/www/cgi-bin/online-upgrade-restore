@@ -1,0 +1,41 @@
+#!/bin/sh
+# Online-upgrade manual restore CGI
+# Receives raw POST body (application/octet-stream), saves and extracts
+
+TMPFILE="/tmp/manual-restore-backup.tar.gz"
+
+# 直接读 stdin 的 POST body
+cat > "$TMPFILE" 2>/dev/null
+
+# 验证文件是否存在且非空
+if [ ! -s "$TMPFILE" ]; then
+	echo "Content-Type: text/plain; charset=utf-8"
+	echo ""
+	echo "ERROR:未收到文件数据"
+	rm -f "$TMPFILE"
+	exit 0
+fi
+
+# 验证 gzip 格式
+if ! gzip -t "$TMPFILE" 2>/dev/null; then
+	echo "Content-Type: text/plain; charset=utf-8"
+	echo ""
+	echo "ERROR:上传文件不是有效的 gzip 格式"
+	rm -f "$TMPFILE"
+	exit 0
+fi
+
+# 执行恢复（tar xzf 到根目录）
+cd / && tar xzf "$TMPFILE" 2>/dev/null
+RV=$?
+rm -f "$TMPFILE"
+
+if [ $RV -eq 0 ]; then
+	echo "Content-Type: text/plain; charset=utf-8"
+	echo ""
+	echo "OK:配置已从上传的备份文件恢复，建议重启路由器使配置生效"
+else
+	echo "Content-Type: text/plain; charset=utf-8"
+	echo ""
+	echo "ERROR:配置恢复失败，备份文件可能已损坏"
+fi
