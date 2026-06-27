@@ -195,7 +195,6 @@ return view.extend({
 			// 刷新备份文件信息显示
 			fs.exec('/bin/sh', ['-c', "ls -t /root/pre-upgrade-backup-*.tar.gz 2>/dev/null | head -1 | while read f; do echo \"$f $(date -r \"$f\" '+%Y-%m-%d %H:%M:%S') $(du -h \"$f\" | cut -f1)\"; done"]).then(function(r) {
 				var hint = document.getElementById('backup-hint');
-				var backupInfoText = document.getElementById('backup-info-text');
 				var dlBtn = document.getElementById('btn-download');
 				if (!hint) return;
 				var output = (r.stdout || '').trim();
@@ -210,14 +209,9 @@ return view.extend({
 						href: '/cgi-bin/luci/admin/system/online_upgrade/download',
 						style: 'color:#4CAF50;text-decoration:none;',
 						target: '_blank'
-					}, '✅ 备份文件: ' + name + ' (' + ts + ', ' + size + ')');
+					}, '✅ 备份文件: ' + name + ' | ' + ts + ' | ' + size);
 					hint.appendChild(link);
 					if (dlBtn) dlBtn.style.display = 'inline-block';
-					if (backupInfoText) {
-						backupInfoText.textContent = '备份文件: ' + name + ' | ' + ts + ' | ' + size;
-						var parent = backupInfoText.closest('#backup-info');
-						if (parent) parent.style.display = 'block';
-					}
 				} else {
 					fs.exec('/bin/sh', ['-c', 'date -r /etc/config/sysupgrade.tgz 2>/dev/null || echo ""']).then(function(r2) {
 						var ts2 = (r2.stdout || '').trim();
@@ -455,14 +449,6 @@ return view.extend({
 				]),
 				E('div', {style: 'margin-top:14px;text-align:right;'}, [
 					E('button', {class: 'btn cbi-button-save', style: 'padding:7px 20px;border-radius:4px;cursor:pointer;', click: saveCfg}, '保存配置')
-				])
-			]),
-
-			// 备份信息
-			E('div', {id: 'backup-info', style: 'display:none;margin-bottom:16px;'}, [
-				E('div', {'class': 'cbi-section', style: 'padding:14px 20px;'}, [
-					E('span', {style: 'font-size:13px;color:#666;'}, ''),
-					E('span', {id: 'backup-info-text', style: 'font-size:13px;color:#4CAF50;'}, '')
 				])
 			]),
 
