@@ -1,0 +1,46 @@
+#!/bin/sh
+# Auto-reinstall luci-app-online-upgrade after sysupgrade
+# Installed by /lib/upgrade/keep.d/ so it survives firmware upgrade
+
+# 只在插件确实丢失时才运行
+[ -f /usr/bin/online-upgrade.sh ] && exit 0
+
+logger -t "online-upgrade" "检测到插件丢失，正在尝试自动重装..."
+
+# 1. 尝试从包列表恢复
+if [ -f /root/.pkg-list.txt ]; then
+	logger -t "online-upgrade" "从包列表恢复中..."
+	while read -r pkg; do
+		[ -z "$pkg" ] && continue
+		# 跳过已存在的包
+		apk info -e "$pkg" 2>/dev/null && continue
+		apk add "$pkg" 2>/dev/null && logger -t "online-upgrade" "已安装: $pkg"
+	done < /root/.pkg-list.txt
+fi
+
+# 2. 如果插件还是没装上，从 GitHub 下载最新 Release
+if [ ! -f /usr/bin/online-upgrade.sh ]; then
+	logger -t "online-upgrade" "从 GitHub 下载最新插件..."
+	# 查找最新 .apk 下载地址
+	RELEASE_JSON=$(curl -sL --connect-timeout 10 \
+		"https://api.github.com/repos/gooyjq/luci-app-online-upgrade/releases/latest" 2>/dev/null)
+	APK_URL=$(echo "$RELEASE_JSON" | jsonfilter -e "@.assets[*].browser_download_url" 2>/dev/null | grep -E '\.apk$' | head -1)
+	
+	if [ -n "$APK_URL" ]; then
+		curl -sL --connect-timeout 30 -o /tmp/luci-app-online-upgrade.apk "$APK_URL" 2>/dev/null
+		if [ -s /tmp/luci-app-online-upgrade.apk ]; then
+			apk add --allow-untrusted /tmp/luci-app-online-upgrade.apk 2>/dev/null
+			rm -f /tmp/luci-app-online-upgrade.apk
+			if [ -f /usr/bin/online-upgrade.sh ]; then
+				logger -t "online-upgrade" "✅ 自动重装成功"
+			fi
+		fi
+	else
+		logger -t "online-upgrade" "⚠️ 无法获取最新 Release，跳过自动重装"
+	fi
+fi
+
+# 3. 清理包列表（避免下次重复执行）
+rm -f /root/.pkg-list.txt
+
+exit 0

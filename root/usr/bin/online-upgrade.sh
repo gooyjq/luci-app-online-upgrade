@@ -300,6 +300,12 @@ echo "Step 4: 执行 sysupgrade（自动恢复配置）..."
 echo "sysupgrade" > /tmp/online-upgrade-status
 sync
 sleep 1
+
+# ---- 保存包列表（用于升级后自动重装）----
+echo "  正在保存已安装包列表..."
+apk info 2>/dev/null > /root/.pkg-list.txt
+sync
+
 echo "  命令: sysupgrade -f ${BACKUP_TMP} ${TMP_FIRMWARE}"
 /sbin/sysupgrade -f "$BACKUP_TMP" "$TMP_FIRMWARE"
 

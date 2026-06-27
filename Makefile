@@ -60,6 +60,7 @@ define Package/luci-app-online-upgrade/install
 
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./root/etc/uci-defaults/99-online-upgrade $(1)/etc/uci-defaults/99-online-upgrade
+	$(INSTALL_BIN) ./root/etc/uci-defaults/90-online-upgrade-auto $(1)/etc/uci-defaults/90-online-upgrade-auto
 
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/controller/admin_system
 	$(INSTALL_DATA) ./root/usr/lib/lua/luci/controller/admin_system/online_upgrade.lua \
