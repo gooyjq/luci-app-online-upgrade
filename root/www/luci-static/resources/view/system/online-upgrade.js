@@ -180,8 +180,60 @@ return view.extend({
 		function runUpgrade() { startUpgrade(false); }
 		function runForceUpgrade() { startUpgrade(true); }
 
+		function runBackup() {
+			updateOutput('正在创建配置备份...\n');
+			fs.exec('/usr/bin/online-upgrade.sh', ['backup']).then(function(r) {
+				updateOutput(r.stdout + (r.stderr ? '\n' + r.stderr : '') + '\n');
+				// 刷新备份信息
+				refreshBackupInfo();
+			}).catch(function(e) {
+				updateOutput('❌ 备份失败: ' + e.message + '\n');
+			});
+		}
+
+		function refreshBackupInfo() {
+			// 刷新备份文件信息显示
+			fs.exec('/bin/sh', ['-c', "ls -t /root/pre-upgrade-backup-*.tar.gz 2>/dev/null | head -1 | while read f; do echo \"$f $(date -r \"$f\" '+%Y-%m-%d %H:%M:%S') $(du -h \"$f\" | cut -f1)\"; done"]).then(function(r) {
+				var hint = document.getElementById('backup-hint');
+				var backupInfoText = document.getElementById('backup-info-text');
+				var dlBtn = document.getElementById('btn-download');
+				if (!hint) return;
+				var output = (r.stdout || '').trim();
+				if (output) {
+					var parts = output.split(' ');
+					var name = parts[0].split('/').pop();
+					var ts = parts[1] + ' ' + parts[2];
+					var size = parts[3] || '';
+					hint.innerHTML = '';
+					hint.style.color = '#4CAF50';
+					var link = E('a', {
+						href: '/cgi-bin/luci/admin/system/online_upgrade/download',
+						style: 'color:#4CAF50;text-decoration:none;',
+						target: '_blank'
+					}, '✅ 备份文件: ' + name + ' (' + ts + ', ' + size + ')');
+					hint.appendChild(link);
+					if (dlBtn) dlBtn.style.display = 'inline-block';
+					if (backupInfoText) {
+						backupInfoText.textContent = '备份文件: ' + name + ' | ' + ts + ' | ' + size;
+						var parent = backupInfoText.closest('#backup-info');
+						if (parent) parent.style.display = 'block';
+					}
+				} else {
+					fs.exec('/bin/sh', ['-c', 'date -r /etc/config/sysupgrade.tgz 2>/dev/null || echo ""']).then(function(r2) {
+						var ts2 = (r2.stdout || '').trim();
+						if (ts2) {
+							hint.textContent = '⚠️ 配置文件备份时间 ' + ts2 + '（旧版备份）';
+							hint.style.color = '#ff9800';
+						} else {
+							hint.textContent = '⚠️ 暂无备份文件';
+							hint.style.color = '#999';
+						}
+					});
+				}
+			});
+		}
+
 		function autoRestore() {
-			// 自动恢复（从路由器本地备份文件）
 			fs.exec('/bin/sh', ['-c', 'ls -t /root/pre-upgrade-backup-*.tar.gz 2>/dev/null | head -1']).then(function(r) {
 				var latestBackup = (r.stdout || '').trim();
 				if (latestBackup) {
@@ -306,47 +358,7 @@ return view.extend({
 					}
 				}
 			});
-			// 检查备份文件
-			fs.exec('/bin/sh', ['-c', "ls -t /root/pre-upgrade-backup-*.tar.gz 2>/dev/null | head -1 | while read f; do echo \"$f $(date -r \"$f\" '+%Y-%m-%d %H:%M:%S') $(du -h \"$f\" | cut -f1)\"; done"]).then(function(r) {
-				var hint = document.getElementById('backup-hint');
-				var backupInfoText = document.getElementById('backup-info-text');
-				var dlBtn = document.getElementById('btn-download');
-				if (!hint) return;
-				var output = (r.stdout || '').trim();
-				if (output) {
-					var parts = output.split(' ');
-					var name = parts[0].split('/').pop();
-					var ts = parts[1] + ' ' + parts[2];
-					var size = parts[3] || '';
-					hint.innerHTML = '';
-					hint.style.color = '#4CAF50';
-				// 备份文件名点击
-				var link = E('a', {
-				    href: '/cgi-bin/luci/admin/system/online_upgrade/download',
-				    style: 'color:#4CAF50;text-decoration:none;',
-				    target: '_blank'
-				}, '✅ 备份文件: ' + name + ' (' + ts + ', ' + size + ')');
-					hint.appendChild(link);
-					if (dlBtn) dlBtn.style.display = 'inline-block';
-					if (backupInfoText) {
-						backupInfoText.textContent = '备份文件: ' + name + ' | ' + ts + ' | ' + size;
-						var parent = backupInfoText.closest('#backup-info');
-						if (parent) parent.style.display = 'block';
-					}
-				} else {
-					// 回退检查 /etc/config/sysupgrade.tgz
-					fs.exec('/bin/sh', ['-c', 'date -r /etc/config/sysupgrade.tgz 2>/dev/null || echo ""']).then(function(r2) {
-						var ts2 = (r2.stdout || '').trim();
-						if (ts2) {
-							hint.textContent = '⚠️ 配置文件备份时间 ' + ts2 + '（旧版备份，保留在此供异常恢复）';
-							hint.style.color = '#ff9800';
-						} else {
-							hint.textContent = '⚠️ 无备份文件 - 升级前会自动创建';
-							hint.style.color = '#999';
-						}
-					});
-				}
-			});
+			refreshBackupInfo();
 		}, 100);
 
 		// ======== 构建页面 ========
@@ -381,14 +393,25 @@ return view.extend({
 					E('button', {id: 'btn-check', class: 'btn cbi-button-action', click: runCheck}, '检查更新'),
 					E('button', {id: 'btn-upgrade', class: 'btn cbi-button-action important', style: 'display:none;background:#4CAF50;border-color:#4CAF50;', click: runUpgrade}, '立即升级'),
 					E('button', {id: 'btn-force', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;', click: runForceUpgrade}, '强制更新'),
-					E('span', {id: 'check-result', style: 'color:#888;font-size:12px;margin-left:4px;'}, ''),
-					E('button', {id: 'btn-download', class: 'btn cbi-button', style: 'display:none;padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:4px;border:1px solid #2196F3;color:#2196F3;background:transparent;', click: function() { var p = window.location.pathname.match(/^\/.*\/admin/) || ['/cgi-bin/luci/admin']; var b = p[0].replace('/admin', ''); window.open(b + '/admin/system/online_upgrade/download', '_blank'); }}, '📥 下载备份'),
-					E('button', {id: 'btn-auto-restore', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:4px;border:1px solid #4CAF50;color:#4CAF50;background:transparent;', click: autoRestore, title: '从路由器本地的备份文件自动恢复'}, '自动恢复'),
-					E('button', {id: 'btn-manual-restore', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:4px;border:1px solid #ff9800;color:#ff9800;background:transparent;', click: manualRestore, title: '从本地上传备份文件恢复'}, '📂 手动恢复'),
-					E('input', {id: 'manual-backup-file', type: 'file', accept: '.tar.gz,.tgz,.gz', style: 'display:none', change: handleManualBackupFile}),
-					E('span', {id: 'backup-hint', style: 'color:#999;font-size:11px;margin-left:6px;'}, '')
-				])
-			]),
+					E('span', {id: 'check-result', style: 'color:#888;font-size:12px;margin-left:4px;'}, '')
+					])
+					]),
+
+					// 备份 & 恢复卡片
+					E('div', {'class': 'cbi-section', style: 'margin-bottom:16px;padding:20px;'}, [
+					E('div', {style: 'font-size:16px;font-weight:600;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #eee;display:flex;align-items:center;gap:8px;'}, [
+					E('span', {style: 'font-size:18px;'}, '💾'),
+					'备份 & 恢复'
+					]),
+					E('div', {style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;'}, [
+					E('button', {id: 'btn-backup', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;border:1px solid #2196F3;color:#2196F3;background:transparent;', click: runBackup, title: '创建配置备份到 /root/'}, '📦 创建备份'),
+					E('button', {id: 'btn-download', class: 'btn cbi-button', style: 'display:none;padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;border:1px solid #4CAF50;color:#4CAF50;background:transparent;', click: function() { var p = window.location.pathname.match(/^\/.*\/admin/) || ['/cgi-bin/luci/admin']; var b = p[0].replace('/admin', ''); window.open(b + '/admin/system/online_upgrade/download', '_blank'); }}, '⬇ 下载备份'),
+					E('button', {id: 'btn-auto-restore', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;border:1px solid #ff9800;color:#ff9800;background:transparent;', click: autoRestore, title: '从路由器本地的备份文件恢复'}, '🔄 自动恢复'),
+					E('button', {id: 'btn-manual-restore', class: 'btn cbi-button', style: 'padding:7px 14px;border-radius:4px;cursor:pointer;font-size:12px;border:1px solid #e91e63;color:#e91e63;background:transparent;', click: manualRestore, title: '从本地上传备份文件恢复'}, '📂 手动恢复'),
+					E('input', {id: 'manual-backup-file', type: 'file', accept: '.tar.gz,.tgz,.gz', style: 'display:none', change: handleManualBackupFile})
+					]),
+					E('div', {id: 'backup-hint', style: 'color:#999;font-size:12px;padding:4px 0;'}, '状态检查中...')
+					]),
 
 			// 仓库配置
 			E('div', {'class': 'cbi-section', style: 'margin-bottom:16px;padding:20px;'}, [
